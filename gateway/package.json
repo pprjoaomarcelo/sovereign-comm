@@ -4,8 +4,9 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "start": "ts-node-esm src/index.ts",
-    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node-esm' src/index.ts"
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
   },
   "keywords": [],
   "author": "",

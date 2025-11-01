@@ -8,6 +8,9 @@ import { Wallet, Shield, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { detectNetwork } from "@/lib/mockData";
 import { NetworkBadge } from "@/components/NetworkBadge";
+import { useSessionStore } from "@/hooks/useSession";
+import { PinCreationModal } from "@/components/PinCreationModal";
+import { requestWalletSignature } from "@/lib/encryption";
 
 export default function Connect() {
   const navigate = useNavigate();
@@ -15,6 +18,10 @@ export default function Connect() {
   const [loading, setLoading] = useState(false);
   const [address, setAddress] = useState("");
   const [detectedNetwork, setDetectedNetwork] = useState<ReturnType<typeof detectNetwork> | null>(null);
+  const initializeSession = useSessionStore((state) => state.initializeSession);
+
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pendingWalletAddress, setPendingWalletAddress] = useState<string | null>(null);
 
   const handleAddressChange = (value: string) => {
     setAddress(value);
@@ -47,24 +54,44 @@ export default function Connect() {
       
       if (accounts && accounts[0]) {
         const walletAddress = accounts[0];
-        const network = detectNetwork(walletAddress);
-        
-        // Store in sessionStorage for demo
-        sessionStorage.setItem('wallet', JSON.stringify({
-          address: walletAddress,
-          network: network,
-          connected: true
-        }));
-
-        toast({
-          title: "Wallet connected!",
-          description: `Connected to ${network} network`,
-        });
-
-        setTimeout(() => {
-          navigate("/inbox");
-        }, 500);
+        setPendingWalletAddress(walletAddress);
+        setShowPinModal(true);
+        // A lógica continuará na função handlePinSubmit
       }
+    } catch (error: any) {
+      toast({
+        title: "Falha na Conexão",
+        description: error.message || "Falha ao conectar a carteira",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePinSubmit = async (pin: string) => {
+    if (!pendingWalletAddress) return;
+
+    setLoading(true);
+    try {
+      // 1. Obter assinatura para derivar a chave da sessão
+      const sessionKey = await requestWalletSignature(pendingWalletAddress);
+      
+      // 2. Inicializar a sessão com a chave e o PIN
+      initializeSession(sessionKey, pin);
+
+      const network = detectNetwork(pendingWalletAddress);
+        
+      // Store in sessionStorage for demo
+      sessionStorage.setItem('wallet', JSON.stringify({
+        address: pendingWalletAddress,
+        network: network,
+        connected: true
+      }));
+
+      toast({ title: "Carteira Conectada!", description: `Conectado à rede ${network}` });
+
+      navigate("/inbox");
     } catch (error: any) {
       toast({
         title: "Connection failed",
@@ -72,6 +99,8 @@ export default function Connect() {
         variant: "destructive",
       });
     } finally {
+      setShowPinModal(false);
+      setPendingWalletAddress(null);
       setLoading(false);
     }
   };
@@ -113,6 +142,13 @@ export default function Connect() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <PinCreationModal 
+        open={showPinModal}
+        onOpenChange={setShowPinModal}
+        onSubmit={handlePinSubmit}
+        isProcessing={loading}
+      />
+
       <Card className="w-full max-w-md p-8 bg-card/80 backdrop-blur-sm border-border">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center mx-auto mb-4 shadow-lg">

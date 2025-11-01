@@ -174,53 +174,59 @@ To support user accounts, subscriptions, and usage tracking, the following datab
 
 ### 7.3. Gateway Service Architecture
 
-The gateway is a Node.js service responsible for processing user messages and interfacing with decentralized protocols like IPFS and Bitcoin.
+The gateway is a modular Node.js service designed for resilience and scalability. It moves away from a monolithic structure to a collection of specialized services that handle distinct parts of the message processing and anchoring pipeline.
 
 *   **Tech Stack:**
     *   **Runtime:** Node.js
-    *   **Framework:** Express.js
     *   **Language:** TypeScript
-    *   **IPFS Communication:** `ipfs-http-client`
-    *   **Merkle Tree Generation:** `merkletreejs` + `crypto-js`
+    *   **Core Modules:**
+        *   `express`: For handling API requests.
+        *   `winston`: For robust, structured logging (`logger.service.js`).
+        *   `ipfs-http-client`: For communication with IPFS (`ipfs.service.js`).
+        *   `merkletreejs`, `crypto-js`: For Merkle tree generation.
+        *   `bitcoinjs-lib`, `ecpair`, `tiny-secp256k1`: For creating and signing Bitcoin transactions (`bitcoin.service.js`).
+        *   `axios`: For communicating with external APIs like Blockstream.
 
 *   **API Endpoints:**
-    *   **`POST /messages`**: The primary endpoint for submitting new messages.
-        *   **Request Body Schema:** The endpoint expects a JSON object conforming to the IPLD Message Schema v1.0.
+    *   **`POST /messages`**: The primary endpoint for submitting new messages. It expects a JSON object conforming to the IPLD Message Schema.
+        *   **Request Body Schema (Example):**
             ```json
             {
-              "schemaVersion": "1.1",
+              "schemaVersion": "1.0",
               "timestamp": "2025-10-12T10:00:00Z",
               "sender": "SENDER_PUBLIC_KEY_OR_ID",
-              "recipients": ["RECIPIENT_1_ID", "RECIPIENT_2_ID"],
+              "recipient": "RECIPIENT_PUBLIC_KEY_OR_ID",
               "content": "Message body text.",
               "attachments": [
                 {
                   "name": "file.pdf",
-                  "cid": "CID_OF_THE_ATTACHMENT_ON_IPFS",
-                  "size": 1048576
+                  "cid": "CID_OF_THE_ATTACHMENT_ON_IPFS"
                 }
               ]
             }
             ```
-        *   **Success Response (201):**
+        *   **Success Response (202 Accepted):** The gateway immediately responds with a `202 Accepted` status, indicating the message was received and queued for processing, but not yet anchored. This asynchronous approach improves client-side UX.
             ```json
             {
-              "status": "Message object processed by gateway",
-              "timestamp": "2025-10-12T12:34:56Z",
-              "message_cid": "CID_OF_THE_MESSAGE_OBJECT"
+              "message": "Message received and is being processed.",
+              "cid": "CID_OF_THE_MESSAGE_OBJECT"
             }
             ```
-        *   **Error Response (400):** Returned if required fields (`sender`, `recipients`, `timestamp`) are missing.
 
 *   **Core Logic Flow:**
-    1.  The service receives a JSON object at the `/messages` endpoint.
-    2.  It validates that the required schema fields are present. It checks if `recipients` is an array.
-    3.  The entire JSON object (with the `content` and `attachments`) is added to IPFS, generating a single, unique `message_cid`.
-    4.  The gateway then **loops through each address in the `recipients` array**. For each recipient, it performs the "mailbox update" logic: it fetches their old mailbox, adds the new `message_cid` to their inbox, and generates a `new_mailbox_root_cid` for that specific user.
-    5.  Each of these `new_mailbox_root_cid`s is added to the in-memory batch (`cidBatch`).
-    6.  When the batch size reaches a defined limit (e.g., 5), the service generates a Merkle Tree from the **mailbox CIDs** in the batch.
-    7.  It calculates the Merkle Root of the tree and logs it to the console.
-    8.  The batch is cleared to begin collecting the next set of mailbox CIDs.
-    9.  **(Next Step):** The calculated Merkle Root will be anchored onto the Bitcoin blockchain. In the current implementation, the gateway funds this transaction itself using the wallet configured in its `.env` file. In the full economic model, the user would first pay the gateway for this service via Lightning Network.
+    The new architecture is orchestrated by the **`batch.service.js`**.
+
+    1.  **Message Reception:** The Express server receives a JSON object at the `/messages` endpoint.
+    2.  **IPFS Upload:** The server calls the `ipfs.service` to upload the entire message object to IPFS, generating a single, unique `message_cid`.
+    3.  **Batching:** The `message_cid` is passed to the `messageBatch` instance from the `batch.service`.
+    4.  **Batch Trigger:** The `batch.service` adds the CID to its internal queue. It will trigger the anchoring process under two conditions:
+        *   **Batch Full:** The number of CIDs in the queue reaches `BATCH_SIZE` (e.g., 5).
+        *   **Timeout:** A timer (`BATCH_TIMEOUT_MS`, e.g., 60 seconds) expires, processing whatever is in the queue, even if it's not full. This ensures messages aren't stuck waiting indefinitely.
+    5.  **Merkle Tree & Anchoring:** When a batch is processed, the `batch.service` calls the `ipfs.service` to generate a Merkle Tree from the CIDs and then calls the `bitcoin.service` to anchor the resulting Merkle Root on the Bitcoin Testnet.
+    6.  **Resilience and Error Handling:**
+        *   **Retries:** If the anchoring process fails (e.g., due to a temporary API issue with Blockstream), the `batch.service` will automatically retry the operation up to `MAX_ANCHOR_RETRIES` times, using an exponential backoff delay to avoid spamming the service.
+        *   **Dead-Letter Queue (DLQ):** If a batch fails all retry attempts, it is considered "poisoned". The service writes the entire failed batch to a local `dead-letter-queue.log` file. This prevents data loss and allows the gateway operator to manually inspect and re-process the failed batch later.
+
+This modular and resilient architecture ensures that messages are processed efficiently and reliably, with built-in mechanisms to handle failures gracefully.
 
 This anchoring transaction is a "proof-of-existence" for the updated state of multiple mailboxes and does not directly involve the sender's or recipient's address. The delivery of the message is handled by the client discovering their new mailbox CID and traversing the IPLD graph.

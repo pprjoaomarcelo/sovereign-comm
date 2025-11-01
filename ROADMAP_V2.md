@@ -21,30 +21,32 @@ This document outlines the development phases for building the core infrastructu
 
 *   **1.3. Protocol Reliability & Failure Handling:**
     *   **Task:** Define the end-to-end protocol for handling message delivery failures.
-    *   **Specification:** Detail the client-facing error messages and the user's options, including an automated refund request or a one-click resend attempt via a different gateway.
+    *   **[x] Specification (Gateway-side):** Gateway resilience implemented with retry logic (exponential backoff) and a Dead-Letter Queue (DLQ) for failed batches.
+    *   **Task (Client-side):** Detail the client-facing error messages and the user's options, including an automated refund request or a one-click resend attempt via a different gateway.
 
 *   **1.4. Message Retrieval & Mailbox Protocol:**
     *   **Task:** Formally specify the complete, end-to-end data flow for both sending and receiving a message.
-    *   **Specification:** This document must explicitly detail:
+    *   **[x] Specification (Gateway-side):** This document must explicitly detail:
         *   The IPLD data structures for the Mailbox, Inbox, and Message objects (including replies and attachments).
-        *   The process of a sender's client instructing a gateway to update a recipient's mailbox.
-        *   The process of a gateway batching multiple mailbox updates into a single Merkle Root.
+        *   The process of a sender's client sending a message CID to a gateway.
+        *   **[x] The process of a gateway batching multiple message CIDs into a single Merkle Root.**
         *   The flow for a gateway returning the Merkle Proof to the sender.
         *   The flow for a recipient's client discovering the mailbox update and using the IPLD graph to retrieve and decrypt the new message.
 
 ---
 
-## Phase 2: Implementation - Client & Gateway Software
+## Phase 2: Foundation - Gateway & Economic Primitives
 
 **Objective:** To write the code for the core primitives designed in Phase 1.
 
 *   **2.1. Implement Gateway Governance:** Build the chosen staking/slashing mechanism (either the smart contract or the Bitcoin script-based system).
 *   **2.2. Implement Marketplace:** Develop the gateway discovery UI in the client, including the logic to fetch, display, and select gateways based on the specified metadata.
 *   **2.3. Implement Reliability Protocol:** Code the failure detection, error reporting, and refund/retry logic within the client.
-*   **2.4. Implement Full Message Flow:** Add the Merkle Proof generation logic to the gateway software and the validation logic to the client software. Implement the full IPLD-based mailbox update and retrieval flow.
+*   **[x] 2.4. Implement Core Gateway Flow:** Implement the message processing pipeline in the gateway software.
     *   **[x] Gateway: Implemented Merkle Root generation and Bitcoin anchoring (Testnet) via OP_RETURN.**
-    *   **Task:** Implement dual-mode sending capabilities in the client and gateway:
-        *   **A) Sovereign Mode (Default):** The standard, private, and efficient flow where the Merkle Root of mailbox updates is anchored.
+    *   **[x] Gateway: Implemented intelligent batching (by size and time) and resilient anchoring (retries + DLQ).**
+    *   **Task (Client-side):** Implement dual-mode sending capabilities in the client:
+        *   **A) Sovereign Mode (Default):** The standard, private, and efficient flow where the message CID is sent to a gateway.
         *   **B) Public Manifesto Mode (via IPFS):** An option for the user to send a rich, public, unencrypted message with attachments. The client creates a JSON "manifesto" of the content, uploads it to IPFS, and the gateway anchors the resulting **manifesto CID** in the `OP_RETURN`.
         *   **C) Public Bulletin Mode (On-Chain):** A legacy/experimental option for sending a very short, public, unencrypted message directly into a Bitcoin `OP_RETURN` transaction, with clear warnings about cost and lack of privacy.
 

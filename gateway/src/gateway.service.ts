@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { addJsonToIpfs } from './ipfs.service.js';
 import { messageBatch } from './batch.service.js';
-import { reputationService } from './reputation.service.js';
+// import { reputationService } from './reputation.service.js';
+// import { reputationService } from './reputation.service.js';
 import { createLightningInvoice } from './lightning.js';
 import { calculateFee } from './pricing.service.js';
 import logger from './logger.service.js';
@@ -85,12 +86,10 @@ export function handleBatchStatusRequest(req: Request, res: Response) {
  * In a real-world scenario, this list would come from a decentralized registry.
  */
 export const handleGatewayListRequest = asyncHandler(async (req: Request, res: Response) => {
-  const gateways = reputationService.getGateways();
-
-  // Sort gateways by reputation score in descending order for client convenience
-  const sortedGateways = gateways.sort((a, b) => b.reputationScore - a.reputationScore);
-
-  logger.info(`Serving gateway list request with ${sortedGateways.length} gateways.`);
-
-  res.status(200).json(sortedGateways);
+  // TODO: Re-enable when reputation service is implemented.
+  // For now, this endpoint is not implemented.
+  // const gateways = reputationService.getGateways();
+  // const sortedGateways = gateways.sort((a, b) => b.reputationScore - a.reputationScore);
+  // logger.info(`Serving gateway list request with ${sortedGateways.length} gateways.`);
+  res.status(501).json({ message: "Gateway list endpoint is not yet implemented." });
 });

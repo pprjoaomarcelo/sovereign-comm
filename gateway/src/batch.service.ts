@@ -1,8 +1,9 @@
 import { createMerkleTree } from './ipfs.service.js';
 import { anchorMerkleRoot } from './bitcoin.service.js';
 import logger from './logger.service.js';
+import SHA256 from 'crypto-js/sha256.js';
 import fs from 'fs/promises';
-import { BATCH_SIZE, BATCH_TIMEOUT_MS, MAX_ANCHOR_RETRIES, INITIAL_RETRY_DELAY_MS } from './config.js';
+import { BATCH_SIZE, BATCH_TIMEOUT_MS, MAX_ANCHOR_RETRIES, INITIAL_RETRY_DELAY_MS, GATEWAY_ID } from './config.js';
 
 export interface AnchorReceipt {
   cid: string;
@@ -77,10 +78,8 @@ class MessageBatch {
       const merkleRoot = tree.getRoot().toString('hex');
       const txid = await anchorMerkleRoot(merkleRoot);
       logger.info(`Batch successfully anchored. txid: ${txid}, merkleRoot: ${merkleRoot}`);
-
-      // Report success to the reputation service
-      reputationService.reportSuccess(GATEWAY_ID);
-
+      // TODO: Report success to the reputation service.
+      // reputationService.reportSuccess(GATEWAY_ID);
       // Resolve all promises for the CIDs in this batch
       for (const cid of batch) {
         const pending = this.pendingMessages.get(cid);
@@ -107,10 +106,8 @@ class MessageBatch {
   private async requeueFailedBatch(failedBatch: string[], previousAttempt: number): Promise<void> {
     if (previousAttempt >= MAX_ANCHOR_RETRIES) {
       logger.crit(`CRITICAL: Batch failed after ${MAX_ANCHOR_RETRIES} attempts. Saving to DLQ.`, { failedBatch });
-
-      // Report definitive failure to the reputation service
-      reputationService.reportFailure(GATEWAY_ID);
-      
+      // TODO: Report definitive failure to the reputation service.
+      // reputationService.reportFailure(GATEWAY_ID);
       // Reject all promises for the CIDs in the failed batch
       for (const cid of failedBatch) {
         const pending = this.pendingMessages.get(cid);

@@ -271,6 +271,15 @@ The gateway is a modular Node.js service designed for resilience and scalability
               "cid": "CID_OF_THE_MESSAGE_OBJECT"
             }
             ```
+    *   **`GET /gateways`**: Retorna uma lista de gateways conhecidos na rede.
+        *   **Status Atual:** Este endpoint está **temporariamente desativado** (`501 Not Implemented`) enquanto o `reputation.service` (serviço de reputação) não é finalizado. A funcionalidade será reativada em uma fase futura do desenvolvimento.
+        *   **Success Response (Exemplo Futuro):**
+            ```json
+            [
+              { "id": "gateway_alpha", "url": "http://gateway-alpha.com/api", "reputationScore": 0.95 },
+              { "id": "gateway_beta", "url": "http://gateway-beta.com/api", "reputationScore": 0.87 }
+            ]
+            ```
 
 *   **Core Logic Flow:**
     The new architecture is orchestrated by the **`batch.service.js`**.

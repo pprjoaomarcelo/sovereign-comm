@@ -48,7 +48,7 @@ export async function fetchMessagesFromIndexer(
 
     return response.data as MessagePointer[];
   } catch (error) {
-    console.error(`[P2P] Failed to fetch messages from indexer ${indexerUrl}:`, error.message);
+    console.error(`[P2P] Failed to fetch messages from indexer ${indexerUrl}:`, (error as Error).message);
     return []; // Return an empty array on failure to not break the client app.
   }
 }

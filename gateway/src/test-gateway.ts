@@ -17,7 +17,7 @@ const BATCH_SIZE = 5; // Must match the BATCH_SIZE in the gateway's index.ts
 const POLLING_INTERVAL_MS = 30000; // 30 seconds
 const MAX_ATTEMPTS = 20; // 10 minutes total polling time
 
-const ECPair = ECPairFactory(tinysec);
+const ECPair = ECPairFactory.default(tinysec);
 
 /**
  * Derives the gateway's Bitcoin testnet address from its WIF.
@@ -47,7 +47,7 @@ async function sendMessage(message: object): Promise<string> {
     console.log(`[Client] Message sent successfully. CID: ${response.data.cid}`);
     return response.data.cid;
   } catch (error) {
-    console.error('[Client] Error sending message:', error.message);
+    console.error('[Client] Error sending message:', (error as Error).message);
     throw error;
   }
 }
@@ -91,7 +91,7 @@ async function verifyAnchor(expectedMerkleRoot: string, gatewayAddress: string):
         }
       }
     } catch (error) {
-      console.warn('[Verification] Could not fetch transactions:', error.message);
+      console.warn('[Verification] Could not fetch transactions:', (error as Error).message);
     }
   }, POLLING_INTERVAL_MS);
 }

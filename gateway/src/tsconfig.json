@@ -1,20 +1,23 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "baseUrl": "./src",
-    "outDir": "./dist",
+    "target": "ES2020",
+    "module": "NodeNext", // Use NodeNext for modern ESM support
+    "moduleResolution": "NodeNext", // Required by NodeNext module
+    "outDir": "../dist", // Output directory relative to this tsconfig
+    "rootDir": ".", // Root directory of source files
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true
+    "skipLibCheck": true, // Skip type checking of declaration files
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "baseUrl": "." // Base directory for module resolution
   },
   "include": [
-    "src/**/*.ts"
+    "**/*.ts" // Include all .ts files in the src directory
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/*.test.ts" // Exclude test files from the main build
   ]
 }

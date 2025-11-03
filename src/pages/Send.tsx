@@ -181,7 +181,7 @@ export default function Send() {
       const finalPayload = await prepareFinalPayload(message, isEncrypted, address, recipient);
       // 2. Get the quote based on the actual payload size
       const result = await getQuote(JSON.stringify(finalPayload).length);
-      setEstimatedFee(result.fee_sats); // Atualiza o estado com a taxa real do gateway
+      setQuoteData(result); // Save the full quote data (fee and invoice) to state
       setShowPreview(true);
     } catch (error) {
       console.error('[Send] Failed to get quote:', error);
@@ -190,6 +190,8 @@ export default function Send() {
         description: error instanceof Error ? error.message : "Could not get a quote from the gateway.",
         variant: "destructive"
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -359,7 +361,7 @@ export default function Send() {
                       <DollarSign className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium">Estimated Gateway Fee</span>
                     </div>
-                    <span className="text-sm font-mono font-semibold">{estimatedFee} sats</span>
+                    <span className="text-sm font-mono font-semibold">{quoteData.fee_sats} sats</span>
                   </div>
                   <div className="text-xs text-muted-foreground">This is the cost for the gateway to process and anchor your message.</div>
                 </CardContent>

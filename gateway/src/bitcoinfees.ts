@@ -54,7 +54,9 @@ export async function getRecommendedFees(): Promise<FeeRates> {
 
     return response.data;
   } catch (error) {
-    console.error('[BitcoinFees] Error fetching fee rates:', error.message);
+    if (error instanceof Error) {
+      console.error('[BitcoinFees] Error fetching fee rates:', error.message);
+    }
     // In case of an error, throw it to be handled by the caller.
     throw new Error('Failed to fetch Bitcoin fee rates.');
   }

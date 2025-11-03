@@ -1,159 +1,96 @@
-import { Request, Response } from 'express';
-import { create, IPFSHTTPClient } from 'ipfs-http-client';
-import { MerkleTree } from 'merkletreejs';
-import SHA256 from 'crypto-js/sha256.js';
-import * as bitcoin from 'bitcoinjs-lib';
-import axios from 'axios';
-import ECPairFactory from 'ecpair';
-import * as tinysec from 'tiny-secp256k1';
+import { Request, Response, NextFunction } from 'express';
+import { addJsonToIpfs } from './ipfs.service.js';
+import { messageBatch } from './batch.service.js';
+import { reputationService } from './reputation.service.js';
+import { createLightningInvoice } from './lightning.js';
+import { calculateFee } from './pricing.service.js';
+import logger from './logger.service.js';
 
-const ECPair = ECPairFactory(tinysec);
+// A simple async wrapper to catch errors and pass them to the error middleware
+const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+
+/**
+ * Middleware de Autenticação.
+ * Verifica se uma chave de API válida foi fornecida no header 'X-API-Key'.
+ * Em um sistema real, essa chave seria comparada com uma lista de chaves válidas no banco de dados.
+ */
+export const authenticationMiddleware = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const apiKey = req.header('X-API-Key');
+  const expectedApiKey = process.env.GATEWAY_API_KEY || 'super-secret-key'; // Should be in .env
+
+  if (!apiKey || apiKey !== expectedApiKey) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid API Key.' });
+  }
+
+  next();
+});
 
 interface MessagePayload {
   sender: string;
   recipient: string;
   timestamp: string;
   content: string;
-  attachments: any[];
+  attachments?: unknown[];
 }
 
-const cidBatch: string[] = [];
-const BATCH_SIZE = 5;
-
-let ipfs: IPFSHTTPClient;
-try {
-    ipfs = create({
-        host: 'ipfs.infura.io',
-        port: 5001,
-        protocol: 'https',
-        headers: {
-            Authorization: `Bearer ${process.env.PINATA_JWT}`,
-        },
-    });
-    console.log("IPFS client configured successfully.");
-} catch (error) {
-    console.error("Failed to create IPFS client:", error);
-    process.exit(1);
-}
-
-async function anchorMerkleRoot(merkleRoot: string) {
-  console.log('Attempting to anchor Merkle Root on Bitcoin testnet...');
-
-  const network = bitcoin.networks.testnet;
-  const privateKeyWIF = process.env.GATEWAY_BITCOIN_WIF!;
-  const keyPair = ECPair.fromWIF(privateKeyWIF, network);
-  const { address } = bitcoin.payments.p2tr({ pubkey: keyPair.publicKey, network });
-
-  if (!address) {
-    throw new Error('Could not derive address from WIF key.');
-  }
-
-  console.log(`Gateway P2TR Address: ${address}`);
-
-  try {
-    const { data: utxos } = await axios.get(`https://blockstream.info/testnet/api/address/${address}/utxo`);
-    console.log(`Found ${utxos.length} UTXOs.`);
-
-    if (utxos.length === 0) {
-      console.error(`No UTXOs found for address ${address}. Please fund it from a testnet faucet.`);
-      return;
-    }
-
-    const psbt = new bitcoin.Psbt({ network });
-    let totalInput = 0;
-
-    const utxo = utxos[0];
-    totalInput += utxo.value;
-
-    const { data: txHex } = await axios.get(`https://blockstream.info/testnet/api/tx/${utxo.txid}/hex`);
-    
-    psbt.addInput({
-      hash: utxo.txid,
-      index: utxo.vout,
-      witnessUtxo: {
-        script: Buffer.from(bitcoin.address.toOutputScript(address, network)),
-        value: utxo.value,
-      },
-      tapInternalKey: keyPair.publicKey.subarray(1, 33)
-    });
-
-    const data = Buffer.from(merkleRoot, 'hex');
-    const embed = bitcoin.payments.embed({ data: [data] });
-    psbt.addOutput({
-      script: embed.output!,
-      value: BigInt(0),
-    });
-
-    const fee = BigInt(1000);
-    const changeAmount = BigInt(totalInput) - fee;
-    if (changeAmount > 0) {
-      psbt.addOutput({
-        address: address,
-        value: changeAmount,
-      });
-    }
-
-    psbt.signInput(0, keyPair);
-    psbt.finalizeAllInputs();
-
-    const finalTx = psbt.extractTransaction();
-    const finalTxHex = finalTx.toHex();
-
-    console.log('Constructed and Signed Transaction (Hex):', finalTxHex);
-
-    console.log('Broadcasting transaction...');
-    const { data: txid } = await axios.post('https://blockstream.info/testnet/api/tx', finalTxHex);
-    console.log(`Transaction broadcasted successfully! TXID: ${txid}`);
-
-  } catch (error) {
-    console.error('Error anchoring Merkle Root:', error instanceof axios.AxiosError ? error.response?.data : error);
-  }
-}
-
-async function processAndAnchorBatch() {
-  if (cidBatch.length === 0) return;
-
-  console.log(`Processing batch of ${cidBatch.length} CIDs...`);
-
-  try {
-    const leaves = cidBatch.map(cid => SHA256(cid).toString());
-    const tree = new MerkleTree(leaves, SHA256);
-    const merkleRoot = tree.getRoot().toString('hex');
-
-    console.log('Merkle Root:', merkleRoot);
-
-    await anchorMerkleRoot(merkleRoot);
-
-    cidBatch.length = 0;
-    console.log('Batch processed and cleared.');
-  } catch (error) {
-    console.error('Error processing batch:', error);
-  }
-}
-
-export async function handleNewMessage(req: Request, res: Response) {
+export const handleNewMessage = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const messagePayload: MessagePayload = req.body;
-  console.log('Received new message payload:', messagePayload);
+  logger.info('Received new message payload:', { sender: messagePayload.sender });
 
-  try {
-    const { cid } = await ipfs.add(JSON.stringify(messagePayload));
-    const cidString = cid.toString();
-    console.log(`Message added to IPFS with CID: ${cidString}`);
+  const cidString = await addJsonToIpfs(messagePayload);
+  logger.info(`Message added to IPFS with CID: ${cidString}`);
 
-    cidBatch.push(cidString);
-    console.log(`CID added to batch. Current batch size: ${cidBatch.length}`);
+  messageBatch.addCid(cidString);
 
-    if (cidBatch.length >= BATCH_SIZE) {
-      await processAndAnchorBatch();
-    }
+  res.status(202).json({
+    message: 'Message received and added to batch.',
+    cid: cidString,
+  });
+});
 
-    res.status(200).json({
-      message: 'Message received and added to batch.',
-      cid: cidString,
-      batchStatus: `${cidBatch.length}/${BATCH_SIZE}`,
-    });
-  } catch (error) {
-    console.error('Error adding to IPFS:', error);
-    res.status(500).json({ error: 'Failed to process message object with IPFS.' });
+/**
+ * Handles quote requests from the client.
+ * Calculates a fee and returns a Lightning invoice.
+ */
+export const handleQuoteRequest = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { payloadSize, plan } = req.query;
+  const size = Number(payloadSize);
+
+  if (!payloadSize || isNaN(size) || size <= 0) {
+    res.status(400).json({ error: 'Invalid payloadSize provided.' });
+    return;
   }
+
+  const feeInSats = await calculateFee(size);
+  const memo = `SovereignComm message - ${size} bytes`;
+
+  const { invoice, payment_hash, expires_at } = await createLightningInvoice(feeInSats * 1000, memo);
+  res.status(200).json({ fee_sats: feeInSats, invoice, payment_hash, expires_at });
+});
+
+/**
+ * Returns the current status of the message batch.
+ */
+export function handleBatchStatusRequest(req: Request, res: Response) {
+  res.status(200).json({
+    message: "This endpoint is deprecated."
+  });
 }
+
+/**
+ * Handles requests for the list of known gateways and their reputation.
+ * In a real-world scenario, this list would come from a decentralized registry.
+ */
+export const handleGatewayListRequest = asyncHandler(async (req: Request, res: Response) => {
+  const gateways = reputationService.getGateways();
+
+  // Sort gateways by reputation score in descending order for client convenience
+  const sortedGateways = gateways.sort((a, b) => b.reputationScore - a.reputationScore);
+
+  logger.info(`Serving gateway list request with ${sortedGateways.length} gateways.`);
+
+  res.status(200).json(sortedGateways);
+});

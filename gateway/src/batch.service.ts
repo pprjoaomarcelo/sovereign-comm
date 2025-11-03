@@ -4,21 +4,42 @@ import logger from './logger.service.js';
 import fs from 'fs/promises';
 import { BATCH_SIZE, BATCH_TIMEOUT_MS, MAX_ANCHOR_RETRIES, INITIAL_RETRY_DELAY_MS } from './config.js';
 
+export interface AnchorReceipt {
+  cid: string;
+  txid: string;
+  merkleRoot: string;
+  merkleProof: string[]; // Array de hashes que compõem a prova
+  network: 'bitcoin-testnet';
+}
+
+interface PendingCid {
+  resolve: (receipt: AnchorReceipt) => void;
+  reject: (error: Error) => void;
+}
+
 class MessageBatch {
   private cids: string[] = [];
   private timer: NodeJS.Timeout | null = null;
+  private pendingMessages = new Map<string, PendingCid>();
 
   constructor() {
     this.startTimer();
   }
 
-  addCid(cid: string): void {
-    this.cids.push(cid);
-    logger.info(`CID ${cid} added to batch. Current size: ${this.cids.length}`);
-    if (this.cids.length >= BATCH_SIZE) {
-      logger.info(`Batch is full (size: ${this.cids.length}). Triggering anchor process.`);
-      this.processCurrentBatch();
-    }
+  addCid(cid: string): Promise<AnchorReceipt> {
+    return new Promise((resolve, reject) => {
+      if (this.pendingMessages.has(cid)) {
+        return reject(new Error(`CID ${cid} is already in the batch.`));
+      }
+
+      this.pendingMessages.set(cid, { resolve, reject });
+      this.cids.push(cid);
+      logger.info(`CID ${cid} added to batch. Current size: ${this.cids.length}`);
+      if (this.cids.length >= BATCH_SIZE) {
+        logger.info(`Batch is full (size: ${this.cids.length}). Triggering anchor process.`);
+        this.processCurrentBatch();
+      }
+    });
   }
 
   private startTimer(): void {
@@ -52,10 +73,31 @@ class MessageBatch {
   private async processBatch(batch: string[], attempt = 1): Promise<void> {
     logger.info(`Processing batch of ${batch.length} CIDs (Attempt ${attempt}).`);
     try {
-      const tree = createMerkleTree(batch);
+      const tree = createMerkleTree(batch); // This creates the tree
       const merkleRoot = tree.getRoot().toString('hex');
-      await anchorMerkleRoot(merkleRoot);
-      logger.info(`Batch successfully anchored with Merkle Root: ${merkleRoot}`);
+      const txid = await anchorMerkleRoot(merkleRoot);
+      logger.info(`Batch successfully anchored. txid: ${txid}, merkleRoot: ${merkleRoot}`);
+
+      // Report success to the reputation service
+      reputationService.reportSuccess(GATEWAY_ID);
+
+      // Resolve all promises for the CIDs in this batch
+      for (const cid of batch) {
+        const pending = this.pendingMessages.get(cid);
+        if (pending) {
+          const leaf = SHA256(cid);
+          const proof = tree.getProof(leaf).map(p => p.data.toString('hex'));
+          const receipt: AnchorReceipt = {
+            cid,
+            txid,
+            merkleRoot,
+            merkleProof: proof,
+            network: 'bitcoin-testnet',
+          };
+          pending.resolve(receipt);
+          this.pendingMessages.delete(cid);
+        }
+      }
     } catch (error) {
       logger.error(`ANCHORING FAILED (Attempt ${attempt}):`, { error, batch });
       this.requeueFailedBatch(batch, attempt);
@@ -65,6 +107,18 @@ class MessageBatch {
   private async requeueFailedBatch(failedBatch: string[], previousAttempt: number): Promise<void> {
     if (previousAttempt >= MAX_ANCHOR_RETRIES) {
       logger.crit(`CRITICAL: Batch failed after ${MAX_ANCHOR_RETRIES} attempts. Saving to DLQ.`, { failedBatch });
+
+      // Report definitive failure to the reputation service
+      reputationService.reportFailure(GATEWAY_ID);
+      
+      // Reject all promises for the CIDs in the failed batch
+      for (const cid of failedBatch) {
+        const pending = this.pendingMessages.get(cid);
+        if (pending) {
+          pending.reject(new Error(`Failed to anchor CID ${cid} after ${MAX_ANCHOR_RETRIES} attempts.`));
+          this.pendingMessages.delete(cid);
+        }
+      }
       try {
         const dlqEntry = {
           timestamp: new Date().toISOString(),

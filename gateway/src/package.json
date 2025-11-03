@@ -1,24 +1,45 @@
 {
-  "name": "indexer",
+  "name": "gateway",
   "version": "1.0.0",
-  "description": "SovereignComm Indexer Service",
-  "main": "dist/index.js",
+  "description": "SovereignComm Gateway Service",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node-esm src/index.ts"
+    "start": "npm run build && node dist/index.js",
+ "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node-esm' src/index.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.19.2"
+    "axios": "^1.7.2",
+    "bitcoinjs-lib": "^6.1.6",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.5",
+    "ecpair": "^2.1.0",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "merkletreejs": "^0.4.0",
+    "tiny-secp256k1": "^2.2.3",
+    "winston": "^3.13.1"
   },
   "devDependencies": {
+    "@types/body-parser": "^1.19.5",
+    "@types/cors": "^2.8.17",
+    "@types/crypto-js": "^4.2.2",
     "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
     "@types/node": "^20.14.10",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.5.3"
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "ts-jest": "^29.2.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4",
+    "ts-node-dev": "^2.0.0"
+    
   }
 }

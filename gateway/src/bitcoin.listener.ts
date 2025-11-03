@@ -21,7 +21,7 @@ async function getLatestBlockHash(): Promise<string> {
     const response = await axios.get(`${MEMPOOL_API_URL}/blocks/tip/hash`);
     return response.data;
   } catch (error) {
-    console.error('[BitcoinListener] Error fetching latest block hash:', error.message);
+    console.error('[BitcoinListener] Error fetching latest block hash:', (error as Error).message);
     throw error;
   }
 }
@@ -53,7 +53,7 @@ async function scanBlockForAnchors(blockHash: string): Promise<void> {
       }
     }
   } catch (error) {
-    console.error(`[BitcoinListener] Error scanning block ${blockHash}:`, error.message);
+    console.error(`[BitcoinListener] Error scanning block ${blockHash}:`, (error as Error).message);
   }
 }
 
@@ -71,7 +71,7 @@ export function startBitcoinListener() {
         await scanBlockForAnchors(latestBlockHash);
       }
     } catch (error) {
-      console.error('[BitcoinListener] Polling failed:', error.message);
+      console.error('[BitcoinListener] Polling failed:', (error as Error).message);
     }
   }, POLLING_INTERVAL_MS);
 }

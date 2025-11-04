@@ -10,9 +10,7 @@ import rateLimit from 'express-rate-limit';
 import {
   handleNewMessage,
   handleQuoteRequest,
-  handleBatchStatusRequest,
   handleGatewayListRequest,
-  authenticationMiddleware,
 } from './gateway.service.js';
 import { initializeIpfsClient } from './ipfs.service.js';
 import logger from './logger.service.js';
@@ -54,16 +52,15 @@ app.get('/', (req, res) => {
 });
 
 // --- API Routes ---
-app.get('/quote', handleQuoteRequest);
+app.post('/quote', apiLimiter, handleQuoteRequest);
 app.get('/gateways', handleGatewayListRequest);
 
 // --- Rota de Envio de Mensagem (Protegida em Camadas) ---
 app.post(
   '/messages',
   apiLimiter, // 1. Limita a taxa de requisições
-  // authenticationMiddleware, // 2. Temporariamente desabilitado para testes
-  validateNewMessage, // 3. Valida o formato do corpo da requisição
-  handleNewMessage // 4. Somente se tudo passar, executa a lógica principal
+  validateNewMessage, // 2. Valida o formato do corpo da requisição
+  handleNewMessage // 3. Somente se tudo passar, executa a lógica principal
 );
 
 app.get('/batch/status', handleBatchStatusRequest);

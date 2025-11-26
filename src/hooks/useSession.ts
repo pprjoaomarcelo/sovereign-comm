@@ -165,62 +165,13 @@ export const useSessionStore = create<SessionState>()(
     {
       name: 'sovereign-session-storage', // Key name in localStorage
       partialize: (state) => ({ isInitialized: state.isInitialized }), // Only persist 'isInitialized'
+      // This function runs once when the state is rehydrated from localStorage.
       onRehydrateStorage: () => (state) => {
         if (state) {
+          // If a session is initialized, the app should start in a locked state.
           state.isLocked = state.isInitialized;
         }
       },
     }
   )
 );
-
-// The checkInitialSessionState function is no longer necessary, as the 'persist' middleware handles it.
-      const db = await dbPromise;
-      const salt = await db.get(SESSION_STORE_NAME, SALT_KEY_ID);
-      const encryptedSessionKey = await db.get(SESSION_STORE_NAME, SESSION_KEY_ID);
-
-      if (!salt || !encryptedSessionKey) {
-        throw new Error('No session found in storage.');
-      }
-
-      const pinKey = await deriveKeyFromPin(pin, salt);
-      const sessionKey = await decryptSessionKey(encryptedSessionKey, pinKey);
-
-      set({ sessionKey, isLocked: false });
-      console.log('[useSession] Session unlocked successfully.');
-      return true;
-    } catch (error) {
-      console.error('[useSession] Unlock failed:', error);
-      return false;
-    }
-  },
-
-  lockSession: () => {
-    set({ sessionKey: null, isLocked: true });
-    console.log('[useSession] Session locked.');
-  },
-
-  resetSession: async () => {
-    const db = await dbPromise;
-    await db.delete(SESSION_STORE_NAME, SESSION_KEY_ID);
-    await db.delete(SESSION_STORE_NAME, SALT_KEY_ID);
-    set({ sessionKey: null, isInitialized: false, isLocked: true });
-    console.log('[useSession] Session has been reset.');
-  },
-}));
-
-// Optional: Check session state on application load
-async function checkInitialSessionState() {
-  try {
-    const db = await dbPromise;
-    const storedKey = await db.get(SESSION_STORE_NAME, SESSION_KEY_ID);
-    if (storedKey) {
-      useSessionStore.setState({ isInitialized: true, isLocked: true });
-      console.log('[useSession] Encrypted session found. App is locked.');
-    }
-  } catch (error) {
-    console.error('[useSession] Could not check initial session state:', error);
-  }
-}
-
-checkInitialSessionState();

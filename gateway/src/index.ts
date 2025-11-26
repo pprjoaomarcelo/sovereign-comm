@@ -11,8 +11,8 @@ import {
   handleNewMessage,
   handleQuoteRequest,
   handleGatewayListRequest,
+  handleBatchStatusRequest,
 } from './gateway.service.js';
-import { initializeIpfsClient } from './ipfs.service.js';
 import logger from './logger.service.js';
 import { loggingMiddleware } from './logging.middleware.js';
 import { validateNewMessage } from './validation.middleware.js';
@@ -33,9 +33,6 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-// Initialize services
-initializeIpfsClient();
 
 app.use(express.json());
 
@@ -68,6 +65,10 @@ app.get('/batch/status', handleBatchStatusRequest);
 // --- Error Handling ---
 app.use(errorMiddleware);
 
-app.listen(PORT, () => {
-  logger.info(`Gateway server listening on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    logger.info(`Gateway server listening on port ${PORT}`);
+  });
+}
+
+export default app;

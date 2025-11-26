@@ -98,7 +98,7 @@ class MessageBatch {
         const pending = this.pendingMessages.get(cid);
         if (pending) {
           const leaf = SHA256(cid);
-          const proof = tree.getProof(leaf).map(p => p.data.toString('hex'));
+          const proof = tree.getProof(leaf).map((p: { data: Buffer }) => p.data.toString('hex'));
           const receipt: AnchorReceipt = {
             cid,
             txid,

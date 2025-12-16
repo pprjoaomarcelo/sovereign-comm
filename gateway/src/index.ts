@@ -13,6 +13,7 @@ import {
   handleGatewayListRequest,
   handleBatchStatusRequest,
 } from './gateway.service.js';
+import { initializeIpfsClient } from './ipfs.service.js';
 import logger from './logger.service.js';
 import { loggingMiddleware } from './logging.middleware.js';
 import { validateNewMessage } from './validation.middleware.js';
@@ -33,6 +34,27 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// --- Inicialização de Serviços Externos (Condicional) ---
+// O gateway tentará iniciar mesmo que as chaves não estejam presentes,
+// mas as funcionalidades dependentes falharão de forma controlada.
+if (process.env.PINATA_JWT) {
+  initializeIpfsClient();
+  logger.info('[Startup] IPFS service initialized with Pinata JWT.');
+} else {
+  logger.warn('[Startup] PINATA_JWT not found. IPFS functionality will be disabled.');
+}
+
+if (process.env.VOLTAGE_API_KEY && process.env.VOLTAGE_NODE_ID) {
+  // A importação dinâmica garante que o módulo lightning só seja carregado se a chave existir.
+  import('./lightning.js').then(() => {
+    logger.info('[Startup] Lightning service initialized with Voltage API Key.');
+  }).catch(error => {
+    logger.error('[Startup] Failed to initialize Lightning service.', { error });
+  });
+} else {
+  logger.warn('[Startup] VOLTAGE_API_KEY or VOLTAGE_NODE_ID not found. Lightning functionality will be disabled.');
+}
 
 app.use(express.json());
 

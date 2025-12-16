@@ -2,6 +2,30 @@ import { create, IPFSHTTPClient, Options } from 'ipfs-http-client';
 import logger from './logger.service.js';
 import FormData from 'form-data';
 
+let ipfs: IPFSHTTPClient;
+
+/**
+ * Initializes the IPFS client.
+ * @throws {Error} If the Pinata JWT is not configured.
+ */
+export function initializeIpfsClient(): IPFSHTTPClient {
+  const pinataJwt = process.env.PINATA_JWT;
+  if (!pinataJwt) {
+    throw new Error('PINATA_JWT environment variable is not set.');
+  }
+
+  ipfs = create({
+    host: 'api.pinata.cloud',
+    port: 443,
+    protocol: 'https',
+    headers: {
+      Authorization: `Bearer ${pinataJwt}`,
+    },
+  });
+  logger.info('[IPFS] IPFS client initialized.');
+  return ipfs;
+}
+
 // --- Configuração ---
 const PREFERRED_GATEWAY_RETRIES = 3;
 const PREFERRED_GATEWAY_RETRY_DELAY_MS = 2000; // 2 segundos

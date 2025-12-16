@@ -14,8 +14,9 @@ This document outlines the phased development plan for the SovereignComm project
     *   **Decision:** Define the MVP approach for gateway collateral.
 
 *   **1.2. Gateway Economics & Marketplace:**
-    *   **Task:** Specify the dynamic pricing algorithm (e.g., cost based on message size, attachment size, and storage duration).
-    *   **Task:** Design the UI/UX for the Gateway Marketplace, allowing clients to select gateways based on reputation, signal strength, and price.
+010    *   **Task:** Design the "Off-Chain Auction with On-Chain Settlement" prot9*-ocol.
+    *   **Research:** Specify the winner selection algorithm. Instead of "highest bid wins", design a weighted lottery system (e.g., based on bid value and a future Bitcoin block hash) to ensure fairness and prevent centralization.
+    *   **Task:** Design the UI/UX for the "Auction Board" where gateways publish their off-chain bid transactions.
 
 *   **1.3. Protocol Reliability:**
     *   **Task:** Define the failure handling protocol for the client. What happens if a gateway accepts payment but fails to anchor the message?

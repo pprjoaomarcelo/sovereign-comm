@@ -1,11 +1,11 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import * as tinysec from 'tiny-secp256k1';
-import ECPairFactory from 'ecpair';
+import { ECPairFactory } from 'ecpair';
 import axios from 'axios';
 import logger from './logger.service.js';
 import { getRecommendedFees } from './bitcoinfees.service.js';
 
-const ECPair = ECPairFactory.default(tinysec);
+const ECPair = ECPairFactory(tinysec);
 
 const network = bitcoin.networks.testnet;
 const BITCOIN_API_URL = 'https://mempool.space/testnet/api';

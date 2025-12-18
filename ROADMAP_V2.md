@@ -43,6 +43,9 @@ This document outlines the development phases for building the core infrastructu
 *   **2.2. Implement Marketplace:** Develop the gateway discovery UI in the client, including the logic to fetch, display, and select gateways based on the specified metadata.
 *   **2.3. Implement Reliability Protocol:** Code the failure detection, error reporting, and refund/retry logic within the client.
 *   **[x] 2.4. Implement Core Gateway Flow:** Implement the message processing pipeline in the gateway software.
+    *   **Task (Gateway):** Implement the **JSON Canonicalization Scheme (JCS - RFC 8785)** for all data structures that require a signature (`service_order`, `batch_manifest`). This is a prerequisite for any signature creation or verification.
+        *   **[x] Specification: JCS standard, data structures, and signature process are fully documented.**
+        *   **Task: Implement JCS library in Gateway and Miner nodes.**
     *   **[x] Gateway: Implemented Merkle Root generation and Bitcoin anchoring (Testnet) via OP_RETURN.**
     *   **[x] Gateway: Implemented intelligent batching (by size and time) and resilient anchoring (retries + DLQ).**
     *   **Task (Client-side):** Implement dual-mode sending capabilities in the client:

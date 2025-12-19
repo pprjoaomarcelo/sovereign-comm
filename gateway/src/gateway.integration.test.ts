@@ -4,6 +4,9 @@ import { createLightningInvoice, getInvoiceDetails } from './lightning.js';
 import { addJsonToIpfs } from './ipfs.service.js';
 import { anchorMerkleRoot } from './bitcoin.service.js';
 import { BATCH_SIZE } from './config.js';
+import { MerkleTree } from 'merkletreejs';
+import SHA256 from 'crypto-js/sha256.js';
+import { canonicalize } from 'json-canonicalize';
 
 // Mock as dependências externas para isolar o teste no gateway
 jest.mock('./lightning.js');
@@ -64,5 +67,48 @@ describe('Gateway Integration Test (Bitcoin-Only Flow)', () => {
     expect(messageResponse.body).toHaveProperty('cid', 'QmTestCid123');
     expect(mockedGetInvoiceDetails).toHaveBeenCalledWith('test_payment_hash_123');
     expect(mockedAddJsonToIpfs).toHaveBeenCalled();
+  });
+
+  describe('Gateway Integration Test (New Hashing Logic)', () => {
+    it('should generate the correct Merkle root based on the full message payload', async () => {
+      // 1. Configuração do Mock
+      // Para este teste, o anexo ao IPFS pode retornar qualquer CID, pois não é o foco.
+      mockedAddJsonToIpfs.mockResolvedValue('QmFakeCid');
+      // O pagamento deve ser sempre confirmado.
+      mockedGetInvoiceDetails.mockResolvedValue({ is_confirmed: true, amount_msats: 1000 });
+      // A ancoragem na blockchain é o que queremos espionar.
+      mockedAnchorMerkleRoot.mockResolvedValue('mock_txid_hashing_test');
+
+      // 2. Preparar os dados de teste
+      const messagePayloads = [];
+      for (let i = 0; i < BATCH_SIZE; i++) {
+        messagePayloads.push({
+          sender: `sender_${i}`,
+          recipient: `recipient_${i}`,
+          content: `Test message ${i}`,
+          paymentHash: `payment_hash_${i}`,
+        });
+      }
+
+      // 3. Calcular a Merkle Root esperada (lógica do lado do cliente/verificador)
+      const leaves = messagePayloads.map(payload => {
+        const canonicalizedPayload = canonicalize(payload);
+        return SHA256(canonicalizedPayload);
+      });
+      const tree = new MerkleTree(leaves, SHA256);
+      const expectedMerkleRoot = tree.getRoot().toString('hex');
+
+      // 4. Enviar as mensagens para o gateway para preencher o lote
+      for (const payload of messagePayloads) {
+        await request(app).post('/messages').send(payload);
+      }
+
+      // 5. Verificação
+      // O lote deve ter sido processado exatamente uma vez.
+      expect(mockedAnchorMerkleRoot).toHaveBeenCalledTimes(1);
+
+      // A verificação mais importante: a Merkle Root enviada para ancoragem é a correta?
+      expect(mockedAnchorMerkleRoot).toHaveBeenCalledWith(expectedMerkleRoot);
+    });
   });
 });

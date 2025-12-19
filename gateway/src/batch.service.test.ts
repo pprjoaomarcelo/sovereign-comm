@@ -27,10 +27,14 @@ describe('MessageBatch Service', () => {
     const MOCKED_TXID = 'mock_txid_full_batch';
     mockedAnchorMerkleRoot.mockResolvedValue(MOCKED_TXID);
 
-    const cids = Array.from({ length: BATCH_SIZE }, (_, i) => `test_cid_${i}`);
+    const messages = Array.from({ length: BATCH_SIZE }, (_, i) => ({
+      cid: `test_cid_${i}`,
+      payload: { data: `test_payload_${i}` },
+      paymentHash: `test_payment_hash_${i}`,
+    }));
     
     // Dispara todas as chamadas para addCid e armazena as Promises
-    const promises = cids.map(cid => messageBatch.addCid(cid));
+    const promises = messages.map(msg => messageBatch.addMessage(msg.cid, msg.payload, msg.paymentHash));
 
     // Aguarda a resolução de todas as Promises
     const receipts = await Promise.all(promises);
@@ -53,7 +57,11 @@ describe('MessageBatch Service', () => {
     mockedAnchorMerkleRoot.mockResolvedValue(MOCKED_TXID);
 
     const cid = 'cid_for_timeout';
-    const receiptPromise = messageBatch.addCid(cid);
+    const receiptPromise = messageBatch.addMessage(
+      cid,
+      { data: 'timeout_payload' },
+      'timeout_payment_hash'
+    );
 
     // 3. Avança o tempo artificialmente
     jest.advanceTimersByTime(BATCH_TIMEOUT_MS + 100);

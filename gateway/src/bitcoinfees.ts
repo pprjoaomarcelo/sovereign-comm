@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import logger from './logger.service.js';
 
 const MEMPOOL_SPACE_API_URL = 'https://mempool.space/api/v1/fees/recommended';
 
@@ -32,19 +33,19 @@ export async function getRecommendedFees(): Promise<FeeRates> {
 
   // Check if we have a valid, non-stale cache
   if (cachedFeeRates && (now - cachedFeeRates.timestamp < CACHE_TTL_MS)) {
-    console.log('[BitcoinFees] Returning cached fee rates.');
+    logger.info('[BitcoinFees] Returning cached fee rates.');
     return cachedFeeRates.rates;
   }
 
   try {
-    console.log('[BitcoinFees] Fetching recommended fee rates...');
+    logger.info('[BitcoinFees] Fetching recommended fee rates...');
     const response = await axios.get<FeeRates>(MEMPOOL_SPACE_API_URL);
 
     if (response.status !== 200 || !response.data) {
       throw new Error(`Invalid response from mempool.space API: ${response.status}`);
     }
 
-    console.log(`[BitcoinFees] Fee rates fetched: ${response.data.halfHourFee} sat/vB for 30 min confirmation.`);
+    logger.info(`[BitcoinFees] Fee rates fetched: ${response.data.halfHourFee} sat/vB for 30 min confirmation.`);
 
     // Update the cache with the new rates and timestamp
     cachedFeeRates = {
@@ -54,9 +55,7 @@ export async function getRecommendedFees(): Promise<FeeRates> {
 
     return response.data;
   } catch (error) {
-    if (error instanceof Error) {
-      console.error('[BitcoinFees] Error fetching fee rates:', error.message);
-    }
+    logger.error('[BitcoinFees] Error fetching fee rates.', { error: (error as Error).message });
     // In case of an error, throw it to be handled by the caller.
     throw new Error('Failed to fetch Bitcoin fee rates.');
   }

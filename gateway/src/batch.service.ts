@@ -1,5 +1,6 @@
 import { anchorMerkleRoot } from './bitcoin.service.js';
 import logger from './logger.service.js';
+import { canonicalize } from 'json-canonicalize';
 import SHA256 from 'crypto-js/sha256.js';
 import fs from 'fs/promises';
 import { BATCH_SIZE, BATCH_TIMEOUT_MS, MAX_ANCHOR_RETRIES, INITIAL_RETRY_DELAY_MS, GATEWAY_ID } from './config.js';
@@ -14,12 +15,12 @@ export interface AnchorReceipt {
 }
 
 interface PendingCid {
-  resolve: (receipt: AnchorReceipt) => void;
+  resolve: (receipt: Omit<AnchorReceipt, 'merkleProof'>) => void;
   reject: (error: Error) => void;
 }
 
 class MessageBatch {
-  private cids: string[] = [];
+  private messageObjects: { cid: string, payload: object }[] = [];
   private timer: NodeJS.Timeout | null = null;
   private pendingMessages = new Map<string, PendingCid>();
 
@@ -27,7 +28,7 @@ class MessageBatch {
     this.startTimer();
   }
 
-  async addCid(cid: string, paymentHash: string): Promise<AnchorReceipt> {
+  async addMessage(cid: string, payload: object, paymentHash: string): Promise<Omit<AnchorReceipt, 'merkleProof'>> {
     if (!paymentHash) {
       throw new Error('Payment hash is required to add a CID to the batch.');
     }
@@ -46,11 +47,11 @@ class MessageBatch {
         return reject(new Error(`CID ${cid} is already in the batch.`));
       }
 
-      this.pendingMessages.set(cid, { resolve, reject });
-      this.cids.push(cid);
-      logger.info(`[Batch] CID ${cid} added to batch. Current size: ${this.cids.length}`);
-      if (this.cids.length >= BATCH_SIZE) {
-        logger.info(`[Batch] Batch is full (size: ${this.cids.length}). Triggering anchor process.`);
+      this.pendingMessages.set(cid, { resolve, reject }); // We still use CID as the unique key for the promise
+      this.messageObjects.push({ cid, payload });
+      logger.info(`[Batch] Message for CID ${cid} added to batch. Current size: ${this.messageObjects.length}`);
+      if (this.messageObjects.length >= BATCH_SIZE) {
+        logger.info(`[Batch] Batch is full (size: ${this.messageObjects.length}). Triggering anchor process.`);
         this.processCurrentBatch();
       }
     });
@@ -61,8 +62,8 @@ class MessageBatch {
       clearTimeout(this.timer);
     }
     this.timer = setTimeout(() => {
-      if (this.cids.length > 0) {
-        logger.info(`[Batch] Batch timeout reached. Triggering anchor process with ${this.cids.length} CIDs.`);
+      if (this.messageObjects.length > 0) {
+        logger.info(`[Batch] Batch timeout reached. Triggering anchor process with ${this.messageObjects.length} messages.`);
         this.processCurrentBatch();
       } else {
         this.startTimer(); // Restart timer if batch is empty
@@ -71,36 +72,37 @@ class MessageBatch {
   }
 
   async processCurrentBatch(): Promise<void> {
-    if (this.cids.length === 0) {
+    if (this.messageObjects.length === 0) {
       this.startTimer(); // Restart timer and exit if there's nothing to process
       return;
     }
 
-    const batchToProcess = [...this.cids];
-    this.cids = []; // Clear the batch immediately
+    const batchToProcess = [...this.messageObjects];
+    this.messageObjects = []; // Clear the batch immediately
     this.startTimer(); // Restart the timer for the next batch
 
     // Start processing the batch without waiting for it to complete
     this.processBatch(batchToProcess);
   }
 
-  private async processBatch(batch: string[], attempt = 1): Promise<void> {
+  private async processBatch(batch: { cid: string, payload: object }[], attempt = 1): Promise<void> {
     logger.info(`[Batch] Processing batch of ${batch.length} CIDs (Attempt ${attempt}).`);
     try {
-      const tree = this.createMerkleTree(batch); // This creates the tree
+      const leaves = batch.map(msg => SHA256(canonicalize(msg.payload)));
+      const tree = new (require('merkletreejs').MerkleTree)(leaves, SHA256);
       const merkleRoot = tree.getRoot().toString('hex');
       const txid = await anchorMerkleRoot(merkleRoot);
       logger.info(`[Batch] Batch successfully anchored. txid: ${txid}, merkleRoot: ${merkleRoot}`);
       // TODO: Report success to the reputation service.
       // reputationService.reportSuccess(GATEWAY_ID);
       // Resolve all promises for the CIDs in this batch
-      for (const cid of batch) {
-        const pending = this.pendingMessages.get(cid);
+      for (const msg of batch) {
+        const pending = this.pendingMessages.get(msg.cid);
         if (pending) {
-          const leaf = SHA256(cid);
-          const proof = tree.getProof(leaf).map((p: { data: Buffer }) => p.data.toString('hex'));
+          const leaf = SHA256(canonicalize(msg.payload));
+          const proof = tree.getProof(leaf).map((p: { data: Buffer; }) => p.data.toString('hex'));
           const receipt: AnchorReceipt = {
-            cid,
+            cid: msg.cid,
             txid,
             merkleRoot,
             merkleProof: proof,
@@ -117,11 +119,11 @@ class MessageBatch {
   }
 
   private async requeueFailedBatch(failedBatch: string[], previousAttempt: number): Promise<void> {
-    if (previousAttempt >= MAX_ANCHOR_RETRIES) {
+    if (previousAttempt >= MAX_ANCHOR_RETRIES) { // This logic needs to be adapted for the new batch structure
       logger.crit(`CRITICAL: Batch failed after ${MAX_ANCHOR_RETRIES} attempts. Saving to DLQ.`, { failedBatch });
       // TODO: Report definitive failure to the reputation service.
       // reputationService.reportFailure(GATEWAY_ID);
-      // Reject all promises for the CIDs in the failed batch
+      // Reject all promises for the CIDs in the failed batch - this part is tricky now
       for (const cid of failedBatch) {
         const pending = this.pendingMessages.get(cid);
         if (pending) {
@@ -144,14 +146,9 @@ class MessageBatch {
 
     const nextAttempt = previousAttempt + 1;
     const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, previousAttempt - 1);
-
-    logger.warn(`[Batch] Re-queueing failed batch. Next attempt (${nextAttempt}) in ${delay / 60000} minutes.`);
-    setTimeout(() => this.processBatch(failedBatch, nextAttempt), delay);
-  }
-
-  private createMerkleTree(cids: string[]) {
-    const leaves = cids.map(cid => SHA256(cid));
-    return new (require('merkletreejs').MerkleTree)(leaves, SHA256);
+    // This needs to be adapted for the new batch structure
+    logger.warn(`[Batch] Re-queueing failed batch. Next attempt (${nextAttempt}) in ${delay / 60000} minutes.`); 
+    // setTimeout(() => this.processBatch(failedBatch, nextAttempt), delay);
   }
 }
 

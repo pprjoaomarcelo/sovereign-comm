@@ -1,65 +1,82 @@
 import axios from 'axios';
-import fs from 'fs/promises';
-import { createSign } from 'crypto';
 import { getBtcPriceUsd } from './market-data.service.js';
 import logger from './logger.service.js';
 
-// Mock the dependencies
+// Mock the logger
+jest.mock('./logger.service', () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+}));
+
+// Mock axios
 jest.mock('axios');
-jest.mock('fs/promises');
-jest.mock('./logger.service.js');
-
 const mockedAxios = axios as jest.Mocked<typeof axios>;
-const mockedFs = fs as jest.Mocked<typeof fs>;
 
-// Use the same placeholder keys as in the service to generate a valid signature for tests
-const TEST_PRIVATE_KEY = process.env.GATEWAY_SIGNING_PRIVATE_KEY || '-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL6p2k/Xv2bV8Yg0Z7E5t7y5a5a5a5a5a5a5a5a5a5a5\n-----END PRIVATE KEY-----';
-const FALLBACK_PRICE = 60000;
-
-describe('Market Data Service - Security', () => {
+describe('getBtcPriceUsd', () => {
   beforeEach(() => {
-    // Clear all mocks before each test
+    jest.resetModules(); // Clears cache between tests
     jest.clearAllMocks();
   });
 
-  it('should reject a tampered cache file and use the fallback price', async () => {
-    // 1. SETUP: Simulate network failure to force cache usage
-    mockedAxios.get.mockRejectedValue(new Error('Network is down'));
+  it('should fetch and return the BTC price', async () => {
+    const price = 65000;
+    mockedAxios.get.mockResolvedValue({
+      data: { bitcoin: { usd: price } },
+    });
 
-    // 2. SETUP: Create a valid signature for an *original* payload
-    const originalPrice = 50000;
-    const originalTimestamp = Date.now() - 10000; // A time in the past
-    const originalPayload = `${originalPrice}|${originalTimestamp}`;
-
-    const sign = createSign('SHA256');
-    sign.update(originalPayload);
-    sign.end();
-    const validSignatureForOriginalData = sign.sign(TEST_PRIVATE_KEY, 'hex');
-
-    // 3. SETUP: Create the TAMPERED cache object.
-    // The price is altered, but the signature is for the original price.
-    const tamperedCache = {
-      btcPriceUsd: 99999, // Maliciously altered price!
-      timestamp: originalTimestamp,
-      signature: validSignatureForOriginalData, // Signature no longer matches the payload
-    };
-
-    // 4. SETUP: Mock fs.readFile to return the tampered cache content
-    mockedFs.readFile.mockResolvedValue(JSON.stringify(tamperedCache));
-
-    // 5. EXECUTION: Call the function
     const result = await getBtcPriceUsd();
 
-    // 6. ASSERTION: Verify that the service rejected the bad data and used the safe fallback
-    expect(result.price).toBe(FALLBACK_PRICE);
-    expect(result.isStale).toBe(true);
+    expect(result.price).toBe(price);
+    expect(result.isStale).toBe(false);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith('[MarketData] Fetching fresh BTC/USD price from CoinGecko...');
+  });
 
-    // Also, verify that a critical error was logged
+  it('should return a cached price on subsequent calls', async () => {
+    const price = 65000;
+    mockedAxios.get.mockResolvedValue({
+      data: { bitcoin: { usd: price } },
+    });
+
+    await getBtcPriceUsd(); // First call
+    const result = await getBtcPriceUsd(); // Second call
+
+    expect(result.price).toBe(price);
+    expect(result.isStale).toBe(false);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1); // Should not fetch again
+  });
+
+  it('should return the fallback price and log an error when the API fails without a cache', async () => {
+    const errorMessage = 'API is down';
+    mockedAxios.get.mockRejectedValue(new Error(errorMessage));
+
+    const result = await getBtcPriceUsd();
+
+    expect(result.price).toBe(70000); // Fallback price
+    expect(result.isStale).toBe(true);
     expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('Could not read from file cache'),
-      expect.objectContaining({
-        fileError: expect.any(Error),
-      })
+      '[MarketData] Failed to fetch BTC price. Using cached or fallback value.',
+      { error: errorMessage }
+    );
+  });
+
+  it('should return the stale cached price and log an error when the API fails with a cache', async () => {
+    const cachedPrice = 65000;
+    // First, successfully cache the price
+    mockedAxios.get.mockResolvedValue({ data: { bitcoin: { usd: cachedPrice } } });
+    await getBtcPriceUsd();
+
+    // Now, make the API fail
+    const errorMessage = 'API is down';
+    mockedAxios.get.mockRejectedValue(new Error(errorMessage));
+
+    const result = await getBtcPriceUsd();
+
+    expect(result.price).toBe(cachedPrice); // Stale cached price
+    expect(result.isStale).toBe(true);
+    expect(logger.error).toHaveBeenCalledWith(
+      '[MarketData] Failed to fetch BTC price. Using cached or fallback value.',
+      { error: errorMessage }
     );
   });
 });

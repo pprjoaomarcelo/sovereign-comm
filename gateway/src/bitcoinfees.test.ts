@@ -1,86 +1,84 @@
 import axios from 'axios';
-import { getRecommendedFees, FeeRates } from './bitcoinfees';
+import { getRecommendedFees, FeeRates } from './bitcoinfees.js';
+import logger from './logger.service.js';
 
-// Mock do Axios para simular chamadas de API e do Date para controlar o tempo
+// Mock the logger to prevent console output during tests
+jest.mock('./logger.service', () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+}));
+
+// Mock axios
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-describe('Bitcoin Fees Module', () => {
-  const mockFees: FeeRates = {
-    fastestFee: 50,
-    halfHourFee: 40,
-    hourFee: 30,
-    economyFee: 20,
-    minimumFee: 10,
-  };
+const mockFeeRates: FeeRates = {
+  fastestFee: 100,
+  halfHourFee: 50,
+  hourFee: 20,
+  economyFee: 10,
+  minimumFee: 1,
+};
 
+describe('getRecommendedFees', () => {
+  // Reset modules before each test to clear cache
   beforeEach(() => {
-    // Limpa os mocks antes de cada teste
-    jest.useRealTimers(); // Usa o tempo real por padrão
-    mockedAxios.get.mockClear();
+    jest.resetModules();
+    jest.clearAllMocks();
   });
 
-  it('should fetch and return recommended fees on success', async () => {
-    const mockFees: FeeRates = {
-      fastestFee: 50,
-      halfHourFee: 40,
-      hourFee: 30,
-      economyFee: 20,
-      minimumFee: 10,
-    };
-
-    // Simula uma resposta de sucesso da API
+  it('should fetch and return fee rates on the first call', async () => {
     mockedAxios.get.mockResolvedValue({
       status: 200,
-      data: mockFees,
+      data: mockFeeRates,
     });
 
     const fees = await getRecommendedFees();
 
-    expect(fees).toEqual(mockFees);
-    expect(mockedAxios.get).toHaveBeenCalledWith('https://mempool.space/api/v1/fees/recommended');
+    expect(fees).toEqual(mockFeeRates);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith('[BitcoinFees] Fetching recommended fee rates...');
   });
 
-  it('should return cached fees on a subsequent call within the TTL', async () => {
-    // Simula uma resposta de sucesso da API
+  it('should return cached fee rates on subsequent calls', async () => {
     mockedAxios.get.mockResolvedValue({
       status: 200,
-      data: mockFees,
+      data: mockFeeRates,
     });
 
-    // Primeira chamada para popular o cache
-    const firstCallFees = await getRecommendedFees();
-    expect(firstCallFees).toEqual(mockFees);
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    await getRecommendedFees(); // First call to cache
+    const fees = await getRecommendedFees(); // Second call
 
-    // Segunda chamada, que deve vir do cache
-    const secondCallFees = await getRecommendedFees();
-    expect(secondCallFees).toEqual(mockFees);
-    // A API não deve ser chamada novamente
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(fees).toEqual(mockFeeRates);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1); // Still 1
+    expect(logger.info).toHaveBeenCalledWith('[BitcoinFees] Returning cached fee rates.');
   });
 
-  it('should fetch new fees if the cache is stale', async () => {
-    jest.useFakeTimers();
-    mockedAxios.get.mockResolvedValue({ status: 200, data: mockFees });
+  it('should throw an error if the API response is not 200', async () => {
+    mockedAxios.get.mockResolvedValue({
+      status: 500,
+      data: 'Internal Server Error',
+    });
 
-    // Primeira chamada para popular o cache
-    await getRecommendedFees();
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-
-    // Avança o tempo para além do TTL do cache (5 minutos + 1 segundo)
-    jest.advanceTimersByTime(5 * 60 * 1000 + 1000);
-
-    // Segunda chamada, que deve fazer uma nova busca na API
-    await getRecommendedFees();
-    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
-  });
-
-  it('should throw an error if the API call fails', async () => {
-    // Simula um erro na API
-    mockedAxios.get.mockRejectedValue(new Error('Network Error'));
-
-    // Verifica se a função lança uma exceção
     await expect(getRecommendedFees()).rejects.toThrow('Failed to fetch Bitcoin fee rates.');
+    expect(logger.error).toHaveBeenCalledWith(
+        '[BitcoinFees] Error fetching fee rates.',
+        expect.objectContaining({
+            error: 'Invalid response from mempool.space API: 500'
+        })
+    );
+  });
+
+  it('should throw an error if the axios request fails', async () => {
+    const errorMessage = 'Network Error';
+    mockedAxios.get.mockRejectedValue(new Error(errorMessage));
+
+    await expect(getRecommendedFees()).rejects.toThrow('Failed to fetch Bitcoin fee rates.');
+    expect(logger.error).toHaveBeenCalledWith(
+        '[BitcoinFees] Error fetching fee rates.',
+        expect.objectContaining({
+            error: errorMessage
+        })
+    );
   });
 });

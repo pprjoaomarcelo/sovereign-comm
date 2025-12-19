@@ -34,8 +34,8 @@ export const handleNewMessage = asyncHandler(async (req: Request, res: Response,
 
     // 2. Add the CID to the batch. This step now internally CHECKS THE PAYMENT.
     // The addCid promise resolves when the batch is anchored, which can take time.
-    // We don't await the resolution, as the client should not be blocked.
-    messageBatch.addCid(cidString, paymentHash)
+    // We pass the full payload to be hashed, not just the CID.
+    messageBatch.addMessage(cidString, messagePayload, paymentHash)
       .then(receipt => {
         logger.info(`[Gateway] CID ${receipt.cid} successfully anchored.`, { txid: receipt.txid });
         // TODO: In the future, we can notify the client of anchoring success via WebSocket or another mechanism.

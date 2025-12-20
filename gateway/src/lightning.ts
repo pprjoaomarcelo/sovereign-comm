@@ -1,5 +1,6 @@
 import axios from 'axios';
 import 'dotenv/config';
+import logger from './logger.service.js';
 
 if (!process.env.VOLTAGE_API_KEY) {
   throw new Error('[Config] VOLTAGE_API_KEY is not set in the .env file.');
@@ -24,22 +25,30 @@ const voltageApi = axios.create({
  * Creates a Lightning invoice using the Voltage API.
  * @param amountMsat The amount for the invoice in millisatoshis.
  * @param memo A description for the invoice.
- * @returns The payment request string (BOLT11 invoice).
+ * @returns An object containing the payment request (invoice) and the payment hash.
  */
-export async function createLightningInvoice(amountMsat: number, memo: string): Promise<string> {
+export async function createLightningInvoice(
+  amountMsat: number,
+  memo: string
+): Promise<{ invoice: string; payment_hash: string; expires_at: string }> {
   try {
     console.log(`[Voltage] Creating invoice for ${amountMsat} msats with memo: "${memo}"`);
 
-    // Usando a variável de ambiente em vez do valor fixo.
     const response = await voltageApi.post(`/node/${VOLTAGE_NODE_ID}/invoices`, {
       msatoshi: amountMsat,
       description: memo,
       expiry: 3600, // 1 hour
     });
 
-    return response.data.payment_request;
+    // The r_hash from the response is the payment hash, often base64 encoded.
+    // The payment_request is the BOLT11 invoice string.
+    return {
+      invoice: response.data.payment_request,
+      payment_hash: response.data.r_hash,
+      expires_at: response.data.expires_at,
+    };
   } catch (error) {
-    console.error('[Voltage] Error creating invoice:', error.response?.data || error.message);
+    console.error('[Voltage] Error creating invoice:', (error as any).response?.data || (error as Error).message);
     throw new Error('Failed to create Lightning invoice via Voltage API.');
   }
 }
@@ -63,8 +72,32 @@ export async function getInvoiceStatus(
     // We consider the invoice paid if `settled` is true.
     return { is_confirmed: response.data.settled === true };
   } catch (error) {
-    console.error('[Voltage] Error checking invoice status:', error.response?.data || error.message);
+    console.error('[Voltage] Error checking invoice status:', (error as any).response?.data || (error as Error).message);
     // If the invoice is not found or another error occurs, we assume it's not paid.
     return { is_confirmed: false };
+  }
+}
+
+/**
+ * Fetches the details of a Lightning invoice, including its status and amount.
+ * @param paymentHash The payment hash of the invoice to check.
+ * @param api An optional axios instance for testing purposes.
+ * @returns An object with the invoice details or null if not found.
+ */
+export async function getInvoiceDetails(
+  paymentHash: string,
+  api: typeof voltageApi = voltageApi
+): Promise<{ is_confirmed: boolean; amount_msats: number } | null> {
+  try {
+    logger.info(`[Voltage] Fetching details for invoice hash: ${paymentHash}`);
+    const response = await api.get(`/node/${VOLTAGE_NODE_ID}/invoice/${paymentHash}`);
+
+    return {
+      is_confirmed: response.data.settled === true,
+      amount_msats: Number(response.data.amt_paid_msat) || 0,
+    };
+  } catch (error) {
+    logger.error('[Voltage] Error fetching invoice details:', { paymentHash, error: (error as any).response?.data || (error as Error).message });
+    return null;
   }
 }

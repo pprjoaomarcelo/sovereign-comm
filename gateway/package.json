@@ -4,32 +4,44 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm src/index.ts",
-    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only --esm src/index.ts",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:anchor": "ts-node --esm src/test-anchor.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@stacks/network": "^6.14.0",
-    "axios": "^1.12.2",
+    "axios": "^1.7.2",
     "bitcoinjs-lib": "^6.1.6",
     "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "dotenv": "^16.4.5",
     "ecpair": "^2.1.0",
-    "express": "^5.1.0",
-    "merkletreejs": "^0.4.0",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "merkletreejs": "^0.6.0",
+    "pako": "^2.1.0",
     "tiny-secp256k1": "^2.2.3",
-    "ts-node": "^10.9.2",
-    "winston": "^3.14.1"
+    "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@types/body-parser": "^1.19.5",
+    "@types/cors": "^2.8.17",
     "@types/crypto-js": "^4.2.2",
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.7.2",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.14.10",
+    "@types/pako": "^2.0.3",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
     "nodemon": "^3.1.4",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.3",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   }
 }

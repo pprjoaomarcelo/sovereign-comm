@@ -11,8 +11,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "jest --coverage"
   },
+
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
@@ -80,10 +82,12 @@
     "@tailwindcss/typography": "^0.5.16",
     "@types/chai": "^4.3.16",
     "@types/mocha": "^10.0.7",
+    "@types/jest": "^29.5.12",
     "@types/node": "^22.16.5",
     "@types/pako": "^2.0.4",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
+    "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
@@ -93,9 +97,12 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "hardhat": "^2.22.6",
+    "json-canonicalize": "^2.0.0",
     "lovable-tagger": "^1.1.10",
     "postcss": "^8.5.6",
     "supabase": "^2.48.3",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.2.5",
     "tailwindcss": "^3.4.17",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",

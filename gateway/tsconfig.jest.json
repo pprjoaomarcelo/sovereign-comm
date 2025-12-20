@@ -1,0 +1,10 @@
+{
+  // Estende a configuração principal do seu projeto
+  "extends": "./src/tsconfig.json",
+  "compilerOptions": {
+    // Garante que o TypeScript reconheça os tipos globais do Jest (jest, expect, etc.)
+    "types": ["jest", "node"]
+  },
+  // Inclui todos os arquivos TypeScript e de teste para a verificação de tipos no ambiente de teste
+  "include": ["**/*.ts"]
+}

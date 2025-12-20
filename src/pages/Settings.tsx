@@ -3,12 +3,37 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Switch, SwitchProps } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
+import { useSessionStore } from "@/hooks/useSession";
 import { Settings as SettingsIcon, Bell, Lock, Eye, Gem } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NetworkBadge } from "@/components/NetworkBadge";
 import type { detectNetwork } from "@/lib/mockData";
+
+// Helper to manage settings in localStorage
+const useSetting = <T,>(key: string, defaultValue: T): [T, (value: T) => void] => {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key “${key}”:`, error);
+      return defaultValue;
+    }
+  });
+
+  const setStoredValue = (newValue: T) => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(newValue));
+      setValue(newValue);
+    } catch (error) {
+      console.error(`Error setting localStorage key “${key}”:`, error);
+    }
+  };
+
+  return [value, setStoredValue];
+};
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -16,10 +41,11 @@ export default function Settings() {
   const [connected, setConnected] = useState(false);
   const [address, setAddress] = useState("");
   const [network, setNetwork] = useState<ReturnType<typeof detectNetwork>>("unknown");
-  
-  const [publicMode, setPublicMode] = useState(true);
-  const [notifications, setNotifications] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const resetSession = useSessionStore((state) => state.resetSession);
+  const [publicMode, setPublicMode] = useSetting<boolean>('settings:publicMode', true);
+  const [notifications, setNotifications] = useSetting<boolean>('settings:notifications', false);
+  const [autoRefresh, setAutoRefresh] = useSetting<boolean>('settings:autoRefresh', true);
 
   useEffect(() => {
     const walletData = sessionStorage.getItem('wallet');
@@ -37,6 +63,7 @@ export default function Settings() {
 
   const handleDisconnect = () => {
     sessionStorage.removeItem('wallet');
+    resetSession();
     setConnected(false);
     navigate("/");
   };
@@ -44,7 +71,7 @@ export default function Settings() {
   const handleSaveSettings = () => {
     toast({
       title: "Settings saved",
-      description: "Your preferences have been updated",
+      description: "Your preferences have been saved locally.",
     });
   };
 
@@ -86,6 +113,26 @@ export default function Settings() {
                   <p className="text-sm text-muted-foreground mb-1">Network</p>
                   <NetworkBadge network={network} />
                 </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {connected && (
+          <Card className="p-6 mb-6 bg-card/50 backdrop-blur-sm">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <Gem className="w-4 h-4 text-primary" />
+              Subscription & Usage
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Current Plan</p>
+                  <p className="font-semibold">Freemium</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate('/upgrade')}>
+                  Upgrade
+                </Button>
               </div>
             </div>
           </Card>

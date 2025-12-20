@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1766174531072" clover="3.2.0">
+  <project timestamp="1766174531072" name="All files">
+    <metrics statements="74" coveredstatements="63" conditionals="19" coveredconditionals="11" methods="6" coveredmethods="5" elements="99" coveredelements="79" complexity="0" loc="74" ncloc="74" packages="1" files="5" classes="5"/>
+    <file name="bitcoinfees.service.ts" path="/home/mrx_hck3r/sovereign-comm/gateway/src/bitcoinfees.service.ts">
+      <metrics statements="9" coveredstatements="4" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="0"/>
+      <line num="6" count="1" type="stmt"/>
+      <line num="7" count="1" type="stmt"/>
+      <line num="9" count="1" type="stmt"/>
+      <line num="19" count="1" type="stmt"/>
+      <line num="20" count="0" type="stmt"/>
+      <line num="21" count="0" type="stmt"/>
+      <line num="22" count="0" type="stmt"/>
+      <line num="24" count="0" type="stmt"/>
+      <line num="25" count="0" type="stmt"/>
+    </file>
+    <file name="bitcoinfees.ts" path="/home/mrx_hck3r/sovereign-comm/gateway/src/bitcoinfees.ts">
+      <metrics statements="20" coveredstatements="17" conditionals="6" coveredconditionals="5" methods="1" coveredmethods="1"/>
+      <line num="6" count="1" type="stmt"/>
+      <line num="7" count="1" type="stmt"/>
+      <line num="9" count="1" type="stmt"/>
+      <line num="23" count="1" type="stmt"/>
+      <line num="24" count="1" type="stmt"/>
+      <line num="31" count="1" type="stmt"/>
+      <line num="32" count="5" type="stmt"/>
+      <line num="35" count="5" type="cond" truecount="3" falsecount="0"/>
+      <line num="36" count="4" type="stmt"/>
+      <line num="37" count="4" type="stmt"/>
+      <line num="40" count="1" type="stmt"/>
+      <line num="41" count="1" type="stmt"/>
+      <line num="42" count="1" type="stmt"/>
+      <line num="44" count="1" type="cond" truecount="2" falsecount="1"/>
+      <line num="45" count="0" type="stmt"/>
+      <line num="48" count="1" type="stmt"/>
+      <line num="51" count="1" type="stmt"/>
+      <line num="56" count="1" type="stmt"/>
+      <line num="58" count="0" type="stmt"/>
+      <line num="60" count="0" type="stmt"/>
+    </file>
+    <file name="logger.service.ts" path="/home/mrx_hck3r/sovereign-comm/gateway/src/logger.service.ts">
+      <metrics statements="5" coveredstatements="5" conditionals="1" coveredconditionals="1" methods="0" coveredmethods="0"/>
+      <line num="1" count="1" type="stmt"/>
+      <line num="3" count="1" type="stmt"/>
+      <line num="22" count="1" type="cond" truecount="1" falsecount="0"/>
+      <line num="23" count="1" type="stmt"/>
+      <line num="28" count="1" type="stmt"/>
+    </file>
+    <file name="market-data.service.ts" path="/home/mrx_hck3r/sovereign-comm/gateway/src/market-data.service.ts">
+      <metrics statements="16" coveredstatements="14" conditionals="9" coveredconditionals="3" methods="1" coveredmethods="1"/>
+      <line num="6" count="2" type="stmt"/>
+      <line num="7" count="2" type="stmt"/>
+      <line num="9" count="2" type="stmt"/>
+      <line num="16" count="2" type="stmt"/>
+      <line num="23" count="2" type="stmt"/>
+      <line num="24" count="6" type="stmt"/>
+      <line num="26" count="6" type="cond" truecount="3" falsecount="0"/>
+      <line num="27" count="5" type="stmt"/>
+      <line num="30" count="1" type="stmt"/>
+      <line num="31" count="1" type="stmt"/>
+      <line num="32" count="1" type="stmt"/>
+      <line num="33" count="1" type="stmt"/>
+      <line num="34" count="1" type="stmt"/>
+      <line num="35" count="1" type="stmt"/>
+      <line num="37" count="0" type="stmt"/>
+      <line num="39" count="0" type="cond" truecount="0" falsecount="6"/>
+    </file>
+    <file name="pricing.service.ts" path="/home/mrx_hck3r/sovereign-comm/gateway/src/pricing.service.ts">
+      <metrics statements="24" coveredstatements="23" conditionals="3" coveredconditionals="2" methods="3" coveredmethods="3"/>
+      <line num="6" count="1" type="stmt"/>
+      <line num="7" count="1" type="stmt"/>
+      <line num="8" count="1" type="stmt"/>
+      <line num="9" count="1" type="stmt"/>
+      <line num="35" count="3" type="cond" truecount="0" falsecount="1"/>
+      <line num="37" count="3" type="stmt"/>
+      <line num="38" count="3" type="stmt"/>
+      <line num="41" count="3" type="stmt"/>
+      <line num="42" count="3" type="cond" truecount="1" falsecount="0"/>
+      <line num="43" count="1" type="stmt"/>
+      <line num="47" count="3" type="stmt"/>
+      <line num="48" count="3" type="stmt"/>
+      <line num="51" count="3" type="cond" truecount="1" falsecount="0"/>
+      <line num="52" count="1" type="stmt"/>
+      <line num="56" count="3" type="stmt"/>
+      <line num="59" count="3" type="stmt"/>
+      <line num="60" count="3" type="stmt"/>
+      <line num="61" count="3" type="stmt"/>
+      <line num="63" count="3" type="stmt"/>
+      <line num="65" count="0" type="stmt"/>
+      <line num="69" count="3" type="stmt"/>
+      <line num="72" count="3" type="stmt"/>
+      <line num="75" count="3" type="stmt"/>
+      <line num="78" count="3" type="stmt"/>
+    </file>
+  </project>
+</coverage>

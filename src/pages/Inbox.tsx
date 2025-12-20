@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { requestWalletSignature, decryptMessage } from "@/lib/encryption";
 import { useToast } from "@/hooks/use-toast";
+import { useSessionStore } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -42,6 +43,7 @@ export default function Inbox() {
   const [loading, setLoading] = useState(true);
   const [selectedNetwork, setSelectedNetwork] = useState<string>("all");
   const [walletSignature, setWalletSignature] = useState<string | null>(null);
+  const resetSession = useSessionStore((state) => state.resetSession);
 
   useEffect(() => {
     const walletData = sessionStorage.getItem('wallet');
@@ -157,6 +159,7 @@ export default function Inbox() {
 
   const handleDisconnect = () => {
     sessionStorage.removeItem('wallet');
+    resetSession(); // Limpa a sessão segura (PIN, etc.)
     setConnected(false);
     setAddress("");
     navigate("/");

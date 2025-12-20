@@ -1,5 +1,6 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import logger from './logger.service.js';
+import { AppError } from './error.classes.js';
 
 const VOLTAGE_API_URL = 'https://backend.voltage.cloud/api/v1';
 
@@ -23,16 +24,16 @@ export interface Invoice {
  * @throws {Error} If environment variables are not set or API call fails.
  */
 export async function createLightningInvoice(amountMsat: number, memo: string): Promise<Invoice> {
-  const apiKey = process.env.VOLTAGE_API_KEY;
-  const nodeId = process.env.VOLTAGE_NODE_ID;
+  const { VOLTAGE_API_KEY: apiKey, VOLTAGE_NODE_ID: nodeId } = process.env;
 
   if (!apiKey) {
     logger.error('[Lightning] VOLTAGE_API_KEY is not set.');
-    throw new Error('VOLTAGE_API_KEY is not configured on the gateway.');
+    // This is a critical server misconfiguration.
+    throw new AppError('Lightning service is not configured on the gateway.', 500);
   }
   if (!nodeId) {
     logger.error('[Lightning] VOLTAGE_NODE_ID is not set.');
-    throw new Error('VOLTAGE_NODE_ID is not configured on the gateway.');
+    throw new AppError('Lightning service is not configured on the gateway.', 500);
   }
 
   const voltageApi = axios.create({
@@ -54,9 +55,21 @@ export async function createLightningInvoice(amountMsat: number, memo: string): 
 
     // A resposta da API do Voltage já corresponde à nossa interface 'Invoice'.
     // O 'r_hash' é o payment_hash.
-    return { ...response.data, payment_hash: response.data.r_hash };
-  } catch (error) {
-    logger.error('[Lightning] Error creating invoice via Voltage API:', { error: (error as any).response?.data || (error as Error).message });
-    throw new Error('Failed to create Lightning invoice via Voltage API.');
+    return { ...response.data, payment_hash: response.data.r_hash as string };
+  } catch (err) {
+    const error = err as AxiosError;
+    logger.error('[Lightning] Error creating invoice via Voltage API:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    // Propagate specific errors to the gateway
+    if (error.response?.status === 401) {
+      throw new AppError('Lightning provider authentication failed. Check API Key.', 500);
+    }
+
+    // For other errors (5xx, network timeout), treat as a temporary service unavailability.
+    throw new AppError('The Lightning payment provider is temporarily unavailable.', 503);
   }
 }

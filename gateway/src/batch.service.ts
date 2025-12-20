@@ -109,7 +109,7 @@ class MessageBatch {
             network: 'bitcoin-testnet',
           };
           pending.resolve(receipt);
-          this.pendingMessages.delete(cid);
+          this.pendingMessages.delete(msg.cid);
         }
       }
     } catch (error) {
@@ -118,17 +118,17 @@ class MessageBatch {
     }
   }
 
-  private async requeueFailedBatch(failedBatch: string[], previousAttempt: number): Promise<void> {
+  private async requeueFailedBatch(failedBatch: { cid: string, payload: object }[], previousAttempt: number): Promise<void> {
     if (previousAttempt >= MAX_ANCHOR_RETRIES) { // This logic needs to be adapted for the new batch structure
       logger.crit(`CRITICAL: Batch failed after ${MAX_ANCHOR_RETRIES} attempts. Saving to DLQ.`, { failedBatch });
       // TODO: Report definitive failure to the reputation service.
       // reputationService.reportFailure(GATEWAY_ID);
       // Reject all promises for the CIDs in the failed batch - this part is tricky now
-      for (const cid of failedBatch) {
-        const pending = this.pendingMessages.get(cid);
+      for (const msg of failedBatch) {
+        const pending = this.pendingMessages.get(msg.cid);
         if (pending) {
-          pending.reject(new Error(`Failed to anchor CID ${cid} after ${MAX_ANCHOR_RETRIES} attempts.`));
-          this.pendingMessages.delete(cid);
+          pending.reject(new Error(`Failed to anchor CID ${msg.cid} after ${MAX_ANCHOR_RETRIES} attempts.`));
+          this.pendingMessages.delete(msg.cid);
         }
       }
       try {

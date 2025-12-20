@@ -4,38 +4,72 @@
  */
 
 import { getRecommendedFees } from './bitcoinfees.service.js';
-import logger from './logger.service.js';
-import { getBtcPriceUsd } from './market-data.service.js'; // getStoragePricePerMbUsd is no longer needed
-import { BATCH_SIZE } from './config.js';
-
-// --- Constants for Pricing Model ---
-
-// Estimated size of a Bitcoin transaction with 1 input and 2 outputs (OP_RETURN + change).
-const ANCHOR_TX_VBYTES = 154;
-
-// A base fee in satoshis to cover operational costs (amortized hardware, electricity, etc.).
-// This is a simplified representation of the fixed costs we discussed.
-const BASE_OPERATIONAL_FEE_SATS = 10;
-
-// A small fixed fee per attachment to account for processing overhead.
-const FEE_PER_ATTACHMENT_SATS = 5;
-
-// Estimated cost for the gateway to store 1 byte for 1 year on its own infrastructure.
-// This covers electricity, hardware amortization, bandwidth, etc.
-const SATS_PER_BYTE_STORED = 0.002; // 1 MB = ~2000 sats
-
-// A safety margin (in percent) to add to costs when using stale market data.
-// This protects the gateway operator from price volatility when offline.
-const STALE_DATA_RISK_MARGIN_PERCENTAGE = 5; // 5%
-
-// A fallback on-chain fee in satoshis to use if the fee estimation API fails.
-const ONCHAIN_ANCHOR_FEE_SATS_FALLBACK = 3000;
+import logger from './logger.service.js'; // getStoragePricePerMbUsd is no longer needed
+import { getBtcPriceUsd } from './market-data.service.js';
+import { config } from './config.service.js';
+import { AppError } from './error.classes.js';
 
 /**
  * Represents the basic information about an attachment needed for pricing.
  */
 export interface AttachmentInfo {
   sizeBytes: number;
+}
+
+/**
+ * Fetches the current on-chain fee rate, with a fallback mechanism.
+ * @returns The estimated cost in satoshis for a single anchor transaction.
+ * @throws {AppError} If live fee rates cannot be fetched and no cached data is available.
+ */
+async function getAnchorTransactionCostSats(): Promise<number> {
+  try {
+    const feeRates = await getRecommendedFees();
+    // We aim for a confirmation within about 30 minutes.
+    return Math.ceil(config.anchorTxVBytes * feeRates.halfHourFee);
+  } catch (error: any) {
+    // This catch block is now for a catastrophic failure where getRecommendedFees
+    // could neither fetch live data nor return a stale cached value.
+    logger.error(
+      `[Pricing] CRITICAL: Could not get fee rates from bitcoinfees.service.`,
+      { error: error.message }
+    );
+    throw new AppError('Could not retrieve live Bitcoin fee rates to calculate cost.', 503);
+  }
+}
+
+/**
+ * Calculates the cost related to data storage, converting from USD to satoshis.
+ * Applies a risk margin if the BTC/USD price data is stale.
+ * @param totalDataSize The total size of the data in bytes.
+ * @returns The cost of data storage in satoshis. * @throws {AppError} If the BTC/USD price cannot be fetched.
+ */
+async function getDataCostSats(totalDataSize: number): Promise<number> {
+  let priceResult;
+  try {
+    priceResult = await getBtcPriceUsd();
+  } catch (error: any) {
+    // Propagate the detailed error from the market data service.
+    throw error;
+  }
+
+  const { price: btcPrice, isStale } = priceResult;
+
+  if (isStale) {
+    logger.warn(
+      '[Pricing] Using stale BTC price data. A risk margin will be applied.'
+    );
+  }
+
+  // Calculate storage cost in USD first, then convert to sats
+  const dataCostUsd = totalDataSize * config.usdPerByteStored;
+  let dataCostSats = (dataCostUsd / btcPrice) * 100_000_000; // Convert USD to Sats
+
+  // Apply risk margin if data is stale
+  if (isStale) {
+    dataCostSats *= 1 + config.staleDataRiskMarginPercentage / 100;
+  }
+
+  return dataCostSats;
 }
 
 /**
@@ -46,41 +80,37 @@ export interface AttachmentInfo {
  * @param attachments An array of objects representing the attachments, each with a size in bytes.
  * @returns The **base cost** in satoshis for the gateway to process the message.
  */
-export async function calculateFee(payloadSize: number, attachments: AttachmentInfo[] = []): Promise<number> {
-  // 1. Calculate total data size
-  const totalAttachmentSize = attachments.reduce((sum, attachment) => sum + attachment.sizeBytes, 0);
+export async function calculateFee(
+  payloadSize: number,
+  attachments: AttachmentInfo[] = []
+): Promise<number> {
+  // 0. Check for Emergency Mode
+  if (config.emergencyMode) {
+    logger.warn('[Pricing] Emergency Mode active. Using fixed emergency fee.');
+    return config.emergencyFeeSats;
+  }
+
+  // 1. Calculate individual cost components
+  const totalAttachmentSize = attachments.reduce(
+    (sum, attachment) => sum + attachment.sizeBytes,
+    0
+  );
   const totalDataSize = payloadSize + totalAttachmentSize;
 
-  // 2. Calculate data-related cost (storage, bandwidth)
-  const { isStale } = await getBtcPriceUsd();
-  if (isStale) {
-    logger.warn('[Pricing] Using stale BTC price data. A risk margin will be applied.');
-  }
-  let dataCost = totalDataSize * SATS_PER_BYTE_STORED;
-  // Apply risk margin if data is stale
-  if (isStale) {
-    dataCost *= (1 + (STALE_DATA_RISK_MARGIN_PERCENTAGE / 100));
-  }
+  const dataCostSats = await getDataCostSats(totalDataSize);
+  const onChainAnchorFeeSats = await getAnchorTransactionCostSats();
 
-  // 3. Calculate a fixed cost per attachment
-  const attachmentCountFee = attachments.length * FEE_PER_ATTACHMENT_SATS;
+  // 2. Calculate fixed and per-message costs
+  const attachmentCountFee = attachments.length * config.feePerAttachmentSats;
+  const perMessageAnchorCost = onChainAnchorFeeSats / config.batchSize;
 
-  // 4. Calculate on-chain anchoring cost for the entire batch
-  let onChainAnchorFeeSats = ONCHAIN_ANCHOR_FEE_SATS_FALLBACK;
-  try {
-    const feeRates = await getRecommendedFees();
-    // We aim for a confirmation within about 30 minutes.
-    onChainAnchorFeeSats = Math.ceil(ANCHOR_TX_VBYTES * feeRates.halfHourFee);
-  } catch (error) {
-    logger.warn(`[Pricing] Could not fetch live fee rates. Using fallback value of ${onChainAnchorFeeSats} sats.`, { error: (error as Error).message });
-  }
+  // 3. Calculate total base cost for the gateway operator
+  const totalBaseCost =
+    config.baseOperationalFeeSats + dataCostSats + attachmentCountFee + perMessageAnchorCost;
 
-  // 5. Amortize the on-chain cost per message in the batch
-  const perMessageAnchorCost = onChainAnchorFeeSats / BATCH_SIZE;
-
-  // 6. Calculate total base cost for the gateway operator
-  const totalCost = BASE_OPERATIONAL_FEE_SATS + dataCost + attachmentCountFee + perMessageAnchorCost;
+  // 4. Add operator's profit margin
+  const finalFee = totalBaseCost * (1 + config.gatewayFeePercentage);
 
   // Return a whole number of satoshis
-  return Math.ceil(totalCost);
+  return Math.ceil(finalFee);
 }

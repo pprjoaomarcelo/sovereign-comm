@@ -5,6 +5,7 @@ import { messageBatch } from './batch.service.js';
 import { createLightningInvoice } from './lightning.js';
 import { calculateFee } from './pricing.service.js';
 import type { AttachmentInfo } from './pricing.service.js';
+import { AppError } from './error.classes.js';
 import logger from './logger.service.js';
 
 // A simple async wrapper to catch errors and pass them to the error middleware
@@ -52,7 +53,10 @@ export const handleNewMessage = asyncHandler(async (req: Request, res: Response,
     });
   } catch (error) {
     if ((error as Error).message.includes('Payment not confirmed')) {
-      logger.warn(`[Gateway] Payment not confirmed for hash: ${paymentHash}.`);
+      logger.warn(`[Gateway] Payment not confirmed for hash: ${paymentHash}.`, {
+        sender: loggablePayload.sender,
+        paymentHash,
+      });
       return res.status(402).json({ error: 'Payment required.', details: (error as Error).message });
     }
     next(error); // Pass other errors to the general error handler.
@@ -66,12 +70,18 @@ export const handleNewMessage = asyncHandler(async (req: Request, res: Response,
 export const handleQuoteRequest = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { payloadSize, attachments } = req.body as { payloadSize: number; attachments?: AttachmentInfo[] };
 
-  if (typeof payloadSize !== 'number' || payloadSize < 0) {
-    return res.status(400).json({ error: 'A valid numeric payloadSize is required.' });
+  if (typeof payloadSize !== 'number' || payloadSize <= 0) {
+    // Use AppError for consistent error handling
+    return next(new AppError('A valid, positive numeric payloadSize is required.', 400));
   }
 
   try {
     const feeInSats = await calculateFee(payloadSize, attachments);
+
+    if (feeInSats === 0) {
+      // This might indicate a problem with the pricing calculation, log it.
+      logger.warn('[Gateway] Calculated fee was zero. Review pricing logic.', { payloadSize, attachments });
+    }
 
     const totalAttachmentSize = attachments?.reduce((sum, att) => sum + att.sizeBytes, 0) || 0;
     const totalDataSize = payloadSize + totalAttachmentSize;
@@ -79,6 +89,7 @@ export const handleQuoteRequest = asyncHandler(async (req: Request, res: Respons
     const memo = `SovereignComm message (${totalDataSize} bytes, ${attachmentCount} attachments)`;
 
     const { invoice, payment_hash, expires_at } = await createLightningInvoice(feeInSats * 1000, memo);
+
     res.status(200).json({
       fee_sats: feeInSats,
       invoice,
@@ -86,8 +97,14 @@ export const handleQuoteRequest = asyncHandler(async (req: Request, res: Respons
       expires_at
     });
   } catch (error) {
-    logger.error('[Gateway] Failed to create quote.', { error: (error as Error).message });
-    next(error);
+    // Check the type of error to provide a more specific status code.
+    if (error instanceof AppError) {
+      // If it's a known error from a downstream service (like pricing), propagate it.
+      return next(error);
+    }
+    // For unexpected errors, create a new AppError.
+    logger.error('[Gateway] An unexpected error occurred while creating a quote.', { error: (error as Error).message });
+    next(new AppError('Failed to generate a quote due to an internal error.', 500));
   }
 });
 

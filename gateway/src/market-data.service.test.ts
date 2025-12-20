@@ -13,9 +13,10 @@ jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('getBtcPriceUsd', () => {
+  // Use jest.resetModules() to clear the module cache between tests
   beforeEach(() => {
-    jest.resetModules(); // Clears cache between tests
     jest.clearAllMocks();
+    jest.resetModules(); 
   });
 
   it('should fetch and return the BTC price', async () => {
@@ -34,7 +35,7 @@ describe('getBtcPriceUsd', () => {
 
   it('should return a cached price on subsequent calls', async () => {
     const price = 65000;
-    mockedAxios.get.mockResolvedValue({
+    mockedAxios.get.mockResolvedValueOnce({
       data: { bitcoin: { usd: price } },
     });
 
@@ -63,7 +64,7 @@ describe('getBtcPriceUsd', () => {
   it('should return the stale cached price and log an error when the API fails with a cache', async () => {
     const cachedPrice = 65000;
     // First, successfully cache the price
-    mockedAxios.get.mockResolvedValue({ data: { bitcoin: { usd: cachedPrice } } });
+    mockedAxios.get.mockResolvedValueOnce({ data: { bitcoin: { usd: cachedPrice } } });
     await getBtcPriceUsd();
 
     // Now, make the API fail

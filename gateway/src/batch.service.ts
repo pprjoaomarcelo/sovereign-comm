@@ -147,8 +147,8 @@ class MessageBatch {
     const nextAttempt = previousAttempt + 1;
     const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, previousAttempt - 1);
     // This needs to be adapted for the new batch structure
-    logger.warn(`[Batch] Re-queueing failed batch. Next attempt (${nextAttempt}) in ${delay / 60000} minutes.`); 
-    // setTimeout(() => this.processBatch(failedBatch, nextAttempt), delay);
+    logger.warn(`[Batch] Re-queueing failed batch. Next attempt (${nextAttempt}) in ${delay / 60000} minutes.`);
+    setTimeout(() => this.processBatch(failedBatch, nextAttempt), delay);
   }
 }
 

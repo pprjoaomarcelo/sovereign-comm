@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Label } from "@/components/ui/label"; 
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle, Lock, Send as SendIcon, DollarSign, Database, Loader2, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { detectNetwork, type NetworkType } from "@/lib/mockData";
 import { NetworkBadge } from "@/components/NetworkBadge";
 import { Navbar } from "@/components/Navbar";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import QRCode from "qrcode.react";
+
+import { QRCodeSVG } from "qrcode.react";
 import pako from "pako";
 
 // Nossos módulos de lógica de backend (ainda como esqueletos)
@@ -48,26 +49,31 @@ import { encryptMessage, requestWalletSignature } from "@/lib/encryption";
  * @returns The final payload object ready to be sent or have its size calculated.
  */
 async function prepareFinalPayload(message: string, isEncrypted: boolean, sender: string, recipient: string) {
-  let contentToProcess: string | Uint8Array = message;
+  let finalContent: Uint8Array;
 
-  // 1. Compress first
-  contentToProcess = pako.deflate(contentToProcess);
-  console.log(`[Send] Message compressed. Size: ${contentToProcess.length} bytes`);
-
-  // 2. Encrypt the already compressed content if needed
   if (isEncrypted) {
     const walletSignature = await requestWalletSignature(sender);
-    const { encryptedMessage } = await encryptMessage(contentToProcess, walletSignature);
-    contentToProcess = encryptedMessage;
-    console.log(`[Send] Message encrypted. Final size: ${contentToProcess.length} bytes`);
+    // Encrypt the original message string. The result is a base64 string.
+    const { encryptedMessage } = await encryptMessage(message, walletSignature);
+    // Convert the base64 encrypted string back to bytes for compression
+    finalContent = Uint8Array.from(atob(encryptedMessage), c => c.charCodeAt(0));
+    console.log(`[Send] Message encrypted. Size: ${finalContent.length} bytes`);
+  } else {
+    // If not encrypted, just encode the raw message to bytes
+    finalContent = new TextEncoder().encode(message);
   }
 
-  // 3. Assemble the final object
+  // Always compress the content (whether it's encrypted bytes or raw message bytes)
+  const compressedContent = pako.deflate(finalContent);
+  console.log(`[Send] Content compressed. Final size: ${compressedContent.length} bytes`);
+
+
   return {
     sender: sender,
     recipient: recipient,
     timestamp: new Date().toISOString(),
-    content: contentToProcess instanceof Uint8Array ? Buffer.from(contentToProcess).toString('base64') : contentToProcess,
+    // Convert the final compressed bytes to a base64 string for transmission
+    content: btoa(String.fromCharCode.apply(null, compressedContent)),
     attachments: [], // TODO: Implement attachment logic here
     encrypted: isEncrypted,
     is_compressed: true,
@@ -85,9 +91,9 @@ export default function Send() {
   const [message, setMessage] = useState("");
   const [isEncrypted, setIsEncrypted] = useState(true);
   const [sendMode, setSendMode] = useState<SendMode>("complete");
-
-  const [detectedNetwork, setDetectedNetwork] = useState<NetworkType>("unknown");
-  const [selectedNetwork, setSelectedNetwork] = useState<NetType | "unknown" | "">("");
+ 
+  const [detectedNetwork, setDetectedNetwork] = useState<NetworkType>("unknown"); 
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkType | "unknown" | "">("");
   const [estimatedFee, setEstimatedFee] = useState<number>(0);
   const [showPreview, setShowPreview] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -126,18 +132,19 @@ export default function Send() {
     });
   };
 
-  const handleRecipientChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    dispatch({ type: 'SET_FIELD', field: 'recipient', value });
+    setRecipient(value);
     if (value.trim()) {
       const network = detectNetwork(value);
-      if (network === "ethereum") {
-        dispatch({ type: 'SET_RECIPIENT_NETWORK', network, selected: 'arbitrum' });
-      } else if (network !== "unknown") {
-        dispatch({ type: 'SET_RECIPIENT_NETWORK', network, selected: network as NetType });
-      }
+      setDetectedNetwork(network);
+      // Auto-select the network if it's a known, non-EVM type
+      if (network !== "unknown" && network !== "ethereum") {
+        setSelectedNetwork(network);
+      } 
     } else {
-      dispatch({ type: 'SET_RECIPIENT_NETWORK', network: 'unknown', selected: "" });
+      setDetectedNetwork("unknown");
+      setSelectedNetwork("");
     }
   };
 
@@ -208,8 +215,10 @@ export default function Send() {
     try {
       switch (sendMode) {
         case 'on_chain':
-          // TODO: This mode should call a different gateway endpoint or be handled separately.
-          // For now, we'll simulate a direct anchor.
+          // TODO: This mode should call a different gateway endpoint or be handled separately
+          // For now, we'll simulate a direct anchor. The message must be converted to a byte array.
+          const onChainPayload = new TextEncoder().encode(message);
+          console.log(`[Send] On-chain mode payload prepared. Size: ${onChainPayload.length} bytes`);
           console.log("[Send] On-chain mode is not fully implemented yet."); // Keep console logs in English
           toast({ title: "✅ On-Chain Simulation", description: `Message '${message}' would be anchored directly.` });
           break;
@@ -386,7 +395,7 @@ export default function Send() {
                 To send your message, pay the Lightning invoice below.
               </p>
               <div className="p-4 bg-card rounded-lg inline-block">
-                <QRCode value={quoteData.invoice.toUpperCase()} size={200} />
+                <QRCodeSVG value={quoteData.invoice.toUpperCase()} size={200} />
               </div>
               <div className="font-mono text-lg font-semibold">
                 {quoteData.fee_sats} sats

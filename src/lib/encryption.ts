@@ -1,4 +1,6 @@
 // Client-side encryption for private messages
+import { cryptoProxy } from './cryptoProxy';
+
 export interface EncryptionResult {
   encryptedMessage: string;
   isEncrypted: boolean;
@@ -32,72 +34,28 @@ export async function requestWalletSignature(walletAddress: string): Promise<str
 }
 
 /**
- * Derive encryption key from wallet signature
- */
-async function deriveKeyFromSignature(signature: string): Promise<CryptoKey> {
-  // Convert signature to byte array
-  const encoder = new TextEncoder();
-  const signatureData = encoder.encode(signature.slice(0, 64)); // Use first 64 chars
-  
-  // Import as raw key material
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    signatureData,
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits', 'deriveKey']
-  );
-  
-  // Derive AES-GCM key
-  const salt = encoder.encode('chainchat-encryption-salt');
-  const key = await crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt,
-      iterations: 100000,
-      hash: 'SHA-256'
-    },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-  
-  return key;
-}
-
-/**
  * Encrypt message content using wallet signature
- * Uses Web Crypto API with AES-GCM encryption
+ * This function now delegates the heavy lifting to the crypto worker.
  */
 export async function encryptMessage(
   message: string,
   signature: string
 ): Promise<EncryptionResult> {
-  console.log(`[Encryption] Encrypting message...`, { messageLength: message.length });
+  console.log(`[Encryption] Delegating message encryption to worker...`, { messageLength: message.length });
 
   try {
-    const key = await deriveKeyFromSignature(signature);
-    
-    // Generate random IV (initialization vector)
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    
-    // Encode message
     const encoder = new TextEncoder();
     const messageData = encoder.encode(message);
-    
-    // Encrypt
-    const encryptedData = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv },
-      key,
-      messageData
-    );
-    
-    // Combine IV + encrypted data and convert to base64
-    const combined = new Uint8Array(iv.length + encryptedData.byteLength);
-    combined.set(iv, 0);
-    combined.set(new Uint8Array(encryptedData), iv.length);
-    
+
+    // The PIN here is the wallet signature, which acts as the secret
+    const { iv, ciphertext } = await cryptoProxy.encryptWithPin(messageData, signature);
+
+    // Combine IV and ciphertext for storage/transmission
+    const combined = new Uint8Array(iv.length + ciphertext.length);
+    combined.set(iv);
+    combined.set(ciphertext, iv.length);
+
+    // Convert to base64 to safely store or transmit as a string
     const encryptedMessage = btoa(String.fromCharCode(...combined));
     
     console.log(`[Encryption] Message encrypted successfully`);
@@ -113,32 +71,24 @@ export async function encryptMessage(
 }
 
 /**
- * Decrypt message content using wallet signature
+ * Decrypt message content using wallet signature.
+ * This function now delegates the heavy lifting to the crypto worker.
  */
 export async function decryptMessage(
   encryptedMessage: string,
   signature: string
 ): Promise<string> {
-  console.log(`[Encryption] Decrypting message...`);
+  console.log(`[Encryption] Delegating message decryption to worker...`);
 
   try {
-    const key = await deriveKeyFromSignature(signature);
-    
-    // Decode base64
+    // Decode from base64 and separate IV from ciphertext
     const combined = Uint8Array.from(atob(encryptedMessage), c => c.charCodeAt(0));
-    
-    // Extract IV and encrypted data
     const iv = combined.slice(0, 12);
-    const encryptedData = combined.slice(12);
-    
-    // Decrypt
-    const decryptedData = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv },
-      key,
-      encryptedData
-    );
-    
-    // Decode message
+    const ciphertext = combined.slice(12);
+
+    // The PIN here is the wallet signature, which acts as the secret
+    const decryptedData = await cryptoProxy.decryptWithPin({ iv, ciphertext }, signature);
+
     const decoder = new TextDecoder();
     const decryptedMessage = decoder.decode(decryptedData);
     
@@ -146,8 +96,7 @@ export async function decryptMessage(
     
     return decryptedMessage;
   } catch (error) {
-    console.error(`[Encryption] Decryption failed:`, error);
-    throw new Error(`Falha na descriptografia: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    console.error(`[Encryption] Decryption failed in worker:`, error);
+    throw new Error(`Falha na descriptografia. A assinatura da carteira pode estar incorreta ou os dados corrompidos.`);
   }
 }
-

@@ -34,6 +34,41 @@ The system is designed to anchor data from a potentially offline LoRa mesh netwo
 
 ---
 
+## Project Roadmap (v2)
+
+### Phase 1: Functional Multi-Chain MVP (Direct Interaction)
+*   **Objective:** Have a functional messaging client that can interact directly with major EVM networks (L2s) and Solana, using Supabase as a supporting backend for indexing.
+*   **Steps:**
+    1.  **Implement Real EVM Sending (L2s):** Modify `Send.tsx` so that the Message -> IPFS -> CID flow is sent by the client to an L2 via `ethers.js`.
+    2.  **Implement EVM Message Reading:** Create a backend service that monitors L2s, fetches CIDs, and populates Supabase for the client's inbox.
+    3.  **Consolidate Logic for Solana:** Ensure that direct interaction with Solana follows the same unified pattern (IPFS -> CID -> Anchor).
+    4.  **Business Model UI:** Implement the interface on the Settings page for the subscription and quota model (no functional logic yet).
+
+### Phase 2: Sovereign Network Foundation (Multi-Chain Gateway & Economy)
+*   **Objective:** Build the core components of the "Sovereign Network" via a gateway, including the economic engine and the flexibility for anchoring on multiple networks.
+*   **Steps:**
+    1.  **Implement Flexible Anchoring (Multi-Chain):** Develop the logic in the gateway software to anchor the Merkle Root of messages on different blockchains (e.g., Bitcoin via `OP_RETURN` or an Ethereum L2 via smart contract), optimizing for cost and security.
+    2.  **Gateway Software (v0.1):** Start developing the gateway software (e.g., in Node.js) with the functionality to receive messages via API, process IPFS, and perform anchoring.
+    3.  **Lightning Network Integration:** Implement the gateway's ability to create and verify Lightning invoices, and the client's ability to pay them.
+    4.  **Backend for Subscriptions:** In Supabase, implement the actual logic to manage user subscriptions, payments, and storage quotas.
+
+### Phase 3: End-to-End Integration & Permanent Storage
+*   **Objective:** Connect the client to the gateway, implement persistent storage with Filecoin, and establish the pricing market.
+*   **Steps:**
+    1.  **Client-Gateway API:** Define and implement the API for the client to discover and communicate with gateways.
+    2.  **Implement Real Filecoin Module:** Replace the placeholder code in `lib/filecoin.ts` with a real implementation that interacts with the Filecoin Testnet.
+    3.  **Gateway Marketplace:** Implement the price announcement logic in the gateway and the best-price selection logic in the client.
+
+### Phase 4: Network Launch with Hardware (Mainnet)
+*   **Objective:** Launch the network publicly, with LoRa hardware integration and migration to mainnets.
+*   **Steps:**
+    1.  **LoRa Hardware Integration:** Develop the firmware and software for actual communication via LoRa radio.
+    2.  **Mainnet Migration:** Move all blockchain operations from testnets to mainnets.
+    3.  **Documentation and Community:** Create documentation for users and gateway operators.
+    4.  **Advanced Mode:** Implement the option allowing users to pay directly for their Filecoin storage deals.
+
+---
+
 ## Software Architecture: The Gateway
 
 The core of the online infrastructure is the **SovereignComm Gateway**, a modular and resilient Node.js service written in TypeScript. It is designed to be the reliable bridge between user messages and the decentralized storage and anchoring layers.

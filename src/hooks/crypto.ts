@@ -1,8 +1,5 @@
 /**
  * Derives an encryption key from a PIN and a salt using PBKDF2.
- * @param pin The PIN string.
- * @param salt The salt for key derivation.
- * @returns A CryptoKey for AES-GCM encryption/decryption.
  */
 export async function deriveKeyFromPin(pin: string, salt: Uint8Array): Promise<CryptoKey> {
   const encoder = new TextEncoder();
@@ -17,7 +14,7 @@ export async function deriveKeyFromPin(pin: string, salt: Uint8Array): Promise<C
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: salt,
+      salt: new Uint8Array(salt.buffer),
       iterations: 100000,
       hash: 'SHA-256',
     },
@@ -30,15 +27,12 @@ export async function deriveKeyFromPin(pin: string, salt: Uint8Array): Promise<C
 
 /**
  * Encrypts a data string using a given CryptoKey.
- * @param data The string to be encrypted.
- * @param key The CryptoKey derived from the PIN.
- * @returns A base64 string representing the IV and the encrypted data.
  */
 export async function encryptData(data: string, key: CryptoKey): Promise<string> {
   const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV is recommended for AES-GCM
+  const iv = crypto.getRandomValues(new Uint8Array(12));
   const encryptedContent = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: new Uint8Array(iv.buffer) },
     key,
     encoder.encode(data)
   );
@@ -52,9 +46,6 @@ export async function encryptData(data: string, key: CryptoKey): Promise<string>
 
 /**
  * Decrypts a base64 encoded string using a given CryptoKey.
- * @param encryptedData The base64 string to be decrypted.
- * @param key The CryptoKey derived from the PIN.
- * @returns The original decrypted string.
  */
 export async function decryptData(encryptedData: string, key: CryptoKey): Promise<string> {
   const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
@@ -62,9 +53,9 @@ export async function decryptData(encryptedData: string, key: CryptoKey): Promis
   const data = combined.slice(12);
 
   const decryptedContent = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: new Uint8Array(iv.buffer) },
     key,
-    data
+    new Uint8Array(data.buffer)
   );
 
   return new TextDecoder().decode(decryptedContent);

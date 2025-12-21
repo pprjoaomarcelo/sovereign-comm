@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { Mail, Shield, Zap, Lock, Github, Twitter } from "lucide-react";
+import { MessageSquare, Shield, Zap, Lock, Github, Globe, Layers } from "lucide-react";
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -10,18 +10,27 @@ export default function Landing() {
     {
       icon: Shield,
       title: "Secure by Design",
-      description: "Never shares your private keys. Only uses wallet signatures for authentication.",
+      description: "Your private keys never leave your wallet. Authentication via wallet signatures only.",
     },
     {
-      icon: Zap,
-      title: "Multi-Chain Support",
-      description: "Automatically detects Bitcoin, Ethereum, and Solana networks from your address.",
+      icon: Layers,
+      title: "Multi-Chain & L2 Support",
+      description: "Send messages across Ethereum, Arbitrum, Optimism, Base, Solana, and more.",
     },
     {
       icon: Lock,
-      title: "On-Chain Privacy",
-      description: "View public messages or decrypt private ones. All data lives on the blockchain forever.",
+      title: "End-to-End Encryption",
+      description: "Private messages encrypted with your wallet signature. Only you and the recipient can read.",
     },
+  ];
+
+  const networks = [
+    { name: "Ethereum", color: "bg-blue-500" },
+    { name: "Arbitrum", color: "bg-blue-400" },
+    { name: "Optimism", color: "bg-red-500" },
+    { name: "Base", color: "bg-blue-600" },
+    { name: "Solana", color: "bg-purple-500" },
+    { name: "Sovereign Network", color: "bg-primary" },
   ];
 
   return (
@@ -39,14 +48,14 @@ export default function Landing() {
             </div>
             
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
-              Your On-Chain
-              <span className="block bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">
-                Inbox
+              <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">
+                SovereignComm
               </span>
             </h1>
             
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Connect your wallet to view and send messages stored permanently on Bitcoin, Ethereum, and Solana blockchains. No intermediaries, no censorship.
+              The unified messaging client for Web3. Send encrypted messages across any blockchain. 
+              Your wallet is your identity. No intermediaries, no censorship.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
@@ -55,7 +64,7 @@ export default function Landing() {
                 className="gap-2 bg-primary hover:bg-primary/90 text-black font-semibold text-lg px-8 shadow-lg hover:shadow-[var(--shadow-glow)] transition-all"
                 onClick={() => navigate("/connect")}
               >
-                <Mail className="w-5 h-5" />
+                <MessageSquare className="w-5 h-5" />
                 Connect Wallet
               </Button>
               <Button 
@@ -75,13 +84,31 @@ export default function Landing() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span>Secure</span>
+                <span>Encrypted</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span>Open Source</span>
+                <span>Decentralized</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Supported Networks */}
+      <section className="py-12 border-y border-border bg-card/30">
+        <div className="container mx-auto px-4">
+          <p className="text-center text-sm text-muted-foreground mb-6">Supported Networks</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            {networks.map((network) => (
+              <div 
+                key={network.name}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary border border-border"
+              >
+                <div className={`w-2 h-2 rounded-full ${network.color}`} />
+                <span className="text-sm text-foreground">{network.name}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -119,6 +146,32 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold mb-12 text-center">How It Works</h2>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-primary text-black flex items-center justify-center mx-auto mb-4 text-xl font-bold">1</div>
+                <h3 className="font-semibold mb-2">Connect Wallet</h3>
+                <p className="text-sm text-muted-foreground">Connect MetaMask, Phantom, or any Web3 wallet</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-primary text-black flex items-center justify-center mx-auto mb-4 text-xl font-bold">2</div>
+                <h3 className="font-semibold mb-2">Compose Message</h3>
+                <p className="text-sm text-muted-foreground">Write your message and choose encryption level</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-primary text-black flex items-center justify-center mx-auto mb-4 text-xl font-bold">3</div>
+                <h3 className="font-semibold mb-2">Send On-Chain</h3>
+                <p className="text-sm text-muted-foreground">Sign with your wallet and broadcast to the blockchain</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Security Notice */}
       <section className="py-20">
         <div className="container mx-auto px-4">
@@ -130,8 +183,8 @@ export default function Landing() {
               <div className="space-y-3">
                 <h3 className="text-2xl font-bold">Security First</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Bit Clip Mail never asks for your private keys or seed phrases. 
-                  Authentication is done through wallet signatures only. All messages are stored on-chain, 
+                  SovereignComm never asks for your private keys or seed phrases. 
+                  Authentication is done through wallet signatures only. All messages are stored on decentralized networks, 
                   meaning they are permanent and cannot be deleted. Use encrypted messaging for sensitive content.
                 </p>
                 <div className="flex flex-wrap gap-4 pt-2">
@@ -160,9 +213,9 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center">
-                <Mail className="w-4 h-4 text-black" />
+                <MessageSquare className="w-4 h-4 text-black" />
               </div>
-              <span className="font-bold text-lg">Bit Clip Mail</span>
+              <span className="font-bold text-lg">SovereignComm</span>
             </div>
             
             <div className="flex items-center gap-6">
@@ -171,14 +224,14 @@ export default function Landing() {
                 GitHub
               </Button>
               <Button variant="ghost" size="sm" className="gap-2">
-                <Twitter className="w-4 h-4" />
-                Twitter
+                <Globe className="w-4 h-4" />
+                Docs
               </Button>
             </div>
           </div>
           
           <div className="text-center mt-8 text-sm text-muted-foreground">
-            <p>Built for crypto enthusiasts, developers, and content creators</p>
+            <p>Decentralized messaging for crypto natives, developers, and privacy advocates</p>
           </div>
         </div>
       </footer>

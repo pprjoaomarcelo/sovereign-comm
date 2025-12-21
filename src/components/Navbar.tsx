@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Inbox, Send, Settings, Wallet } from "lucide-react";
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Inbox, Send, Settings, Wallet, MessageSquare } from "lucide-react";
 
 interface NavbarProps {
   connected?: boolean;
@@ -25,10 +24,10 @@ export const Navbar = ({ connected, address, onConnect, onDisconnect }: NavbarPr
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center shadow-lg group-hover:shadow-[var(--shadow-glow)] transition-all">
-              <Wallet className="w-5 h-5 text-black" />
+              <MessageSquare className="w-5 h-5 text-black" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">
-              Bit Clip Mail
+              SovereignComm
             </span>
           </Link>
 
@@ -88,10 +87,9 @@ export const Navbar = ({ connected, address, onConnect, onDisconnect }: NavbarPr
                 onClick={onConnect}
               >
                 <Wallet className="w-4 h-4" />
-                Connect EVM
+                Connect Wallet
               </Button>
             )}
-            <WalletMultiButton />
           </div>
         </div>
       </div>

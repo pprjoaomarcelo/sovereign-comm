@@ -1,29 +1,16 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { NetworkBadge } from "./NetworkBadge";
-import { ExternalLink, Lock, Unlock, Eye, Loader2 } from "lucide-react";
-
-// Representa a estrutura de uma mensagem como definida no Inbox.tsx
-interface Message {
-  id: string;
-  user_address: string;
-  recipient_address: string;
-  content: string;
-  encrypted: boolean;
-  network: string;
-  network_type: string;
-  tx_hash: string | null;
-  raw_content?: string | null;
-}
-
-type DecryptionStatus = 'idle' | 'fetching' | 'decrypting' | 'decrypted' | 'error';
+import { ExternalLink, Lock, Unlock, Eye, Loader2, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import type { Message, DecryptionStatus } from "@/types/message";
 
 interface MessageCardProps {
   message: Message;
   userAddress: string;
   isSent: boolean;
-  onDecrypt: (messageId: string) => Promise<string | null>;
+  onDecrypt?: (messageId: string, setStatus: (status: DecryptionStatus) => void) => Promise<string | null>;
 }
 
 export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: MessageCardProps) => {
@@ -41,25 +28,25 @@ export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: Message
     }).format(new Date(dateString));
   };
 
-  const otherAddress = isSent ? message.recipient_address : message.sender_address;
+  const otherAddress = isSent ? message.recipient_address : message.user_address;
 
   const handleDecrypt = async () => {
     if (!onDecrypt) return;
     
-    setStatus('fetching'); // Pode começar como 'buscando' ou 'pedindo assinatura'
+    setStatus('fetching');
     try {
-      const decrypted = await onDecrypt(message.id);
+      const decrypted = await onDecrypt(message.id, setStatus);
       if (decrypted) {
         setDecryptedContent(decrypted);
         setStatus('decrypted');
       }
-    } finally {
-      if (status !== 'decrypted') setStatus('idle'); // Reseta se não foi bem sucedido
+    } catch {
+      setStatus('error');
     }
   };
 
   const displayContent = message.encrypted 
-    ? (decryptedContent || '🔒 Mensagem criptografada - clique para ver')
+    ? (decryptedContent || '🔒 Encrypted message - click to view')
     : message.content;
 
   const getExplorerUrl = () => {
@@ -81,16 +68,18 @@ export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: Message
 
   const getButtonState = () => {
     switch (status) {
+      case 'requesting_signature':
+        return { text: 'Requesting signature...', icon: <Loader2 className="w-3 h-3 animate-spin" />, disabled: true };
       case 'fetching':
-        return { text: 'Buscando no IPFS...', icon: <Loader2 className="w-3 h-3 animate-spin" />, disabled: true };
+        return { text: 'Fetching from IPFS...', icon: <Loader2 className="w-3 h-3 animate-spin" />, disabled: true };
       case 'decrypting':
-        return { text: 'Descriptografando...', icon: <Loader2 className="w-3 h-3 animate-spin" />, disabled: true };
+        return { text: 'Decrypting...', icon: <Loader2 className="w-3 h-3 animate-spin" />, disabled: true };
       case 'decrypted':
-        return { text: 'Mensagem Visível', icon: <Unlock className="w-3 h-3" />, disabled: true };
+        return { text: 'Message Visible', icon: <Unlock className="w-3 h-3" />, disabled: true };
       case 'error':
-        return { text: 'Tentar Novamente', icon: <Eye className="w-3 h-3" />, disabled: false };
+        return { text: 'Try Again', icon: <Eye className="w-3 h-3" />, disabled: false };
       default:
-        return { text: 'Ver Mensagem', icon: <Eye className="w-3 h-3" />, disabled: false };
+        return { text: 'View Message', icon: <Eye className="w-3 h-3" />, disabled: false };
     }
   };
 
@@ -101,6 +90,27 @@ export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: Message
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              {isSent ? (
+                <Badge variant="outline" className="gap-1 text-xs border-primary/30 text-primary">
+                  <ArrowUpRight className="w-3 h-3" />
+                  Sent
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1 text-xs border-green-500/30 text-green-500">
+                  <ArrowDownLeft className="w-3 h-3" />
+                  Received
+                </Badge>
+              )}
+              {message.status === 'confirmed' ? (
+                <Badge variant="secondary" className="text-xs">Confirmed</Badge>
+              ) : message.status === 'failed' ? (
+                <Badge variant="destructive" className="text-xs">Failed</Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs">Pending</Badge>
+              )}
+            </div>
+            
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs text-muted-foreground font-mono">
                 {isSent ? 'To:' : 'From:'}
@@ -112,7 +122,7 @@ export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: Message
             
             <div className="flex items-center gap-2 flex-wrap">
               <NetworkBadge network={message.network as any} />
-              <span className="text-xs text-muted-foreground">{formatDate(message.timestamp)}</span>
+              <span className="text-xs text-muted-foreground">{formatDate(message.created_at)}</span>
               {message.encrypted && (
                 <div className="flex items-center gap-1 text-xs text-green-500">
                   <Lock className="w-3 h-3" />
@@ -141,7 +151,7 @@ export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: Message
           )}
         </div>
 
-        {message.tx_hash && (
+        {message.tx_hash && message.status === 'confirmed' && (
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs text-muted-foreground font-mono truncate flex-1">
               TX: {formatAddress(message.tx_hash)}
@@ -161,3 +171,5 @@ export const MessageCard = ({ message, userAddress, isSent, onDecrypt }: Message
     </Card>
   );
 };
+
+export type { DecryptionStatus };

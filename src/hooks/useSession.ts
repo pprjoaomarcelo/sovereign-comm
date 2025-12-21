@@ -3,8 +3,6 @@ import { persist } from 'zustand/middleware';
 import { cryptoProxy } from '@/lib/cryptoProxy';
 import { secureStorage } from '@/lib/secureStorage';
 
-// --- Zustand Store ---
-
 interface SessionState {
   sessionKey: string | null;
   isInitialized: boolean;
@@ -13,13 +11,14 @@ interface SessionState {
   unlockSession: (pin: string) => Promise<boolean>;
   lockSession: () => void;
   resetSession: () => Promise<void>;
+  resetActivityTimer: () => void;
 }
 
 export const useSessionStore = create<SessionState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       sessionKey: null,
-      isInitialized: false, // This state will be persisted
+      isInitialized: false,
       isLocked: true,
 
       initializeSession: async (sessionKey, pin) => {
@@ -65,14 +64,17 @@ export const useSessionStore = create<SessionState>()(
         set({ sessionKey: null, isInitialized: false, isLocked: true });
         console.log('[useSession] Session has been reset.');
       },
+
+      resetActivityTimer: () => {
+        // Placeholder for activity timer reset
+        console.log('[useSession] Activity timer reset.');
+      },
     }),
     {
-      name: 'sovereign-session-storage', // Key name in localStorage
-      partialize: (state) => ({ isInitialized: state.isInitialized }), // Only persist 'isInitialized'
-      // This function runs once when the state is rehydrated from localStorage.
+      name: 'sovereign-session-storage',
+      partialize: (state) => ({ isInitialized: state.isInitialized }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // If a session is initialized, the app should start in a locked state.
           state.isLocked = state.isInitialized;
         }
       },

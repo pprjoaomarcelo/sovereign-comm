@@ -38,6 +38,7 @@ export default function Inbox() {
   const { toast } = useToast();
   const [connected, setConnected] = useState(false);
   const [address, setAddress] = useState("");
+  const [network, setNetwork] = useState<string>("unknown");
   const [messages, setMessages] = useState<Message[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,6 +52,7 @@ export default function Inbox() {
       const parsed = JSON.parse(walletData);
       setConnected(parsed.connected);
       setAddress(parsed.address);
+      setNetwork(parsed.network || "unknown");
     }
   }, []);
 
@@ -204,6 +206,7 @@ export default function Inbox() {
       <Navbar 
         connected={connected}
         address={address}
+        network={network}
         onConnect={handleConnect}
         onDisconnect={handleDisconnect}
       />

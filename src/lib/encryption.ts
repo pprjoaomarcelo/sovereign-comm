@@ -1,5 +1,6 @@
 // Client-side encryption for private messages
 import { cryptoProxy } from './cryptoProxy';
+import { bech32 } from 'bech32';
 
 export interface EncryptionResult {
   encryptedMessage: string;
@@ -30,6 +31,80 @@ export async function requestWalletSignature(walletAddress: string): Promise<str
   } catch (error) {
     console.error(`[Encryption] Signature request failed:`, error);
     throw new Error('Assinatura negada. Você precisa assinar para enviar mensagens privadas.');
+  }
+}
+
+/**
+ * Implements LNURL-auth flow to get a stable secret from Alby.
+ * This secret will be used similarly to the signature for key derivation.
+ */
+export async function requestAlbySignature(backendUrl: string): Promise<string> {
+  console.log('[Alby] Starting LNURL-auth flow...');
+  try {
+    // In a real app, the backend would generate a unique k1 and the full LNURL-auth URL.
+    // For this example, we'll simulate a LNURL-auth string.
+    // The backend would return something like: `https://yourbackend.com/api/lnurl-auth?tag=login&k1=SOME_RANDOM_HEX`
+    // which we would encode.
+    const lnurl = bech32.encode('lnurl', bech32.toWords(Buffer.from(`${backendUrl}?tag=login&k1=mock-k1-for-alby`, 'utf8')), 1023);
+
+    if (!window.webln) {
+      throw new Error('WebLN (Alby) not detected.');
+    }
+    await window.webln.enable();
+
+    // The `verifyMessage` in WebLN with a LNURL string triggers the auth flow.
+    // Alby will sign the `k1` from the LNURL and return its public key.
+    const { publicKey, signature } = await window.webln.signMessage(lnurl);
+
+    // In a real app, we would now send the publicKey and signature to our backend to verify.
+    // The backend would confirm the signature matches the k1 and log the user in.
+    // For our encryption purpose, we can derive a stable secret from this interaction.
+    // A simple way is to use a hash of the returned public key.
+    const secret = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(publicKey + signature));
+    const secretHex = Array.from(new Uint8Array(secret)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    console.log('[Alby] LNURL-auth flow successful. Derived secret.');
+    return secretHex;
+  } catch (error) {
+    console.error('[Alby] LNURL-auth failed:', error);
+    throw new Error(`Falha na autenticação com Alby: ${error.message}`);
+  }
+}
+
+/**
+ * Implements LNURL-auth flow to get a stable secret from Alby.
+ * This secret will be used similarly to the signature for key derivation.
+ */
+export async function requestAlbySignature(backendUrl: string): Promise<string> {
+  console.log('[Alby] Starting LNURL-auth flow...');
+  try {
+    // In a real app, the backend would generate a unique k1 and the full LNURL-auth URL.
+    // For this example, we'll simulate a LNURL-auth string.
+    // The backend would return something like: `https://yourbackend.com/api/lnurl-auth?tag=login&k1=SOME_RANDOM_HEX`
+    // which we would encode.
+    const lnurl = bech32.encode('lnurl', bech32.toWords(Buffer.from(`${backendUrl}?tag=login&k1=mock-k1-for-alby`, 'utf8')), 1023);
+
+    if (!window.webln) {
+      throw new Error('WebLN (Alby) not detected.');
+    }
+    await window.webln.enable();
+
+    // The `signMessage` in WebLN with a LNURL string triggers the auth flow.
+    // Alby will sign the `k1` from the LNURL and return its public key and the signature.
+    const { publicKey, signature } = await window.webln.signMessage(lnurl);
+
+    // In a real app, we would now send the publicKey and signature to our backend to verify.
+    // The backend would confirm the signature matches the k1 and log the user in.
+    // For our encryption purpose, we can derive a stable secret from this interaction.
+    // A simple way is to use a hash of the returned public key and signature.
+    const secret = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(publicKey + signature));
+    const secretHex = Array.from(new Uint8Array(secret)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    console.log('[Alby] LNURL-auth flow successful. Derived secret.');
+    return secretHex;
+  } catch (error) {
+    console.error('[Alby] LNURL-auth failed:', error);
+    throw new Error(`Falha na autenticação com Alby: ${error.message}`);
   }
 }
 
@@ -97,6 +172,6 @@ export async function decryptMessage(
     return decryptedMessage;
   } catch (error) {
     console.error(`[Encryption] Decryption failed in worker:`, error);
-    throw new Error(`Falha na descriptografia. A assinatura da carteira pode estar incorreta ou os dados corrompidos.`);
+    throw new Error(`Falha na descriptografia. A assinatura/segredo da carteira pode estar incorreta ou os dados corrompidos.`);
   }
 }

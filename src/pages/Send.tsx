@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { AlertCircle, Lock, Send as SendIcon, DollarSign, Database, Loader2, ShieldAlert } from "lucide-react";
+import { Switch } from "@/components/ui/switch"; 
+import { AlertCircle, Lock, Send as SendIcon, DollarSign, Database, Loader2, ShieldAlert, Shield } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
 import { detectNetwork, type NetworkType } from "@/lib/mockData";
@@ -288,8 +288,11 @@ export default function Send() {
                 <div>
                   <RadioGroupItem value="complete" id="mode-complete" className="peer sr-only" />
                   <Label htmlFor="mode-complete" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                    Secure & Efficient
-                    <span className="text-xs font-normal text-center mt-1">Encrypted, via IPFS, with optimized cost. (Recommended)</span>
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Sovereign Network
+                    </div>
+                    <span className="text-xs font-normal text-center mt-1">Encrypted, via Gateway, with optimized cost. (Recommended)</span>
                   </Label>
                 </div>
                 <div>

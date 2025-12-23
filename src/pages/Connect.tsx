@@ -10,7 +10,6 @@ import { detectNetwork } from "@/lib/mockData";
 import { NetworkBadge } from "@/components/NetworkBadge";
 import { useSessionStore } from "@/hooks/useSession";
 import { PinCreationModal } from "@/components/PinCreationModal";
-import { requestWalletSignature } from "@/lib/encryption";
 
 export default function Connect() {
   const navigate = useNavigate();
@@ -69,15 +68,71 @@ export default function Connect() {
     }
   };
 
+  const signInWithBitcoin = async () => {
+    setLoading(true);
+    try {
+      // 1. Generate a unique challenge message
+      const challengeMessage = "Sovereign Login Challenge: " + Date.now().toString();
+
+      // 2. Request signature from the Bitcoin wallet (e.g., Alby via WebLN)
+      if (typeof window.webln === 'undefined') {
+        toast({
+          title: "Carteira Bitcoin não encontrada",
+          description: "Por favor, instale uma extensão de carteira com suporte a WebLN (ex: Alby).",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      await window.webln.enable();
+      // Para fins de teste, vamos forçar a rede para 'testnet'.
+      // Em produção, detectaríamos a rede da carteira com `webln.getInfo()`.
+      const network = "testnet";
+      console.log(`[Connect] Forçando a rede para: ${network} para fins de teste.`);
+
+      const { signature, pubkey: publicKey } = await window.webln.signMessage(challengeMessage);
+
+      // 3. Send to our Go backend for verification
+      const response = await fetch('http://localhost:8080/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          publicKey: publicKey,
+          signature: signature,
+          message: challengeMessage,
+          network: network, // Forçando 'testnet'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setPendingWalletAddress(publicKey); // The public key is the Sovereign ID
+        // Salva a rede para usar após a criação do PIN
+        sessionStorage.setItem('pendingNetwork', network);
+        setShowPinModal(true);
+      } else {
+        throw new Error(data.error || "Falha na verificação da assinatura.");
+      }
+    } catch (error: any) {
+      toast({ title: "Falha no Sign-in com Bitcoin", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePinSubmit = async (pin: string) => {
     if (!pendingWalletAddress) return;
 
     setLoading(true);
     try {
       // 1. Obter assinatura para derivar a chave da sessão
-      const sessionKey = await requestWalletSignature(pendingWalletAddress);
+      // Para Bitcoin, a chave pública pode ser a própria chave de sessão ou uma derivação dela.
+      // Para este exemplo, usaremos o pendingWalletAddress (que é a chave pública Bitcoin) diretamente.
+      const sessionKey = pendingWalletAddress; // Ou derive uma chave de sessão a partir desta
       
-      // 2. Inicializar a sessão com a chave e o PIN
+      // 2. Inicializar a sessão com a chave e o PIN      
       initializeSession(sessionKey, pin);
 
       const network = detectNetwork(pendingWalletAddress);
@@ -85,7 +140,7 @@ export default function Connect() {
       // Store in sessionStorage for demo
       sessionStorage.setItem('wallet', JSON.stringify({
         address: pendingWalletAddress,
-        network: network,
+        network: sessionStorage.getItem('pendingNetwork') || network,
         connected: true
       }));
 
@@ -101,6 +156,7 @@ export default function Connect() {
     } finally {
       setShowPinModal(false);
       setPendingWalletAddress(null);
+      sessionStorage.removeItem('pendingNetwork');
       setLoading(false);
     }
   };
@@ -185,6 +241,28 @@ export default function Connect() {
             </p>
           </div>
 
+          {/* --- BITCOIN SIGN-IN BUTTON --- */}
+          <div className="space-y-3">
+            <Button
+              className="w-full h-14 gap-3 bg-yellow-500 hover:bg-yellow-500/90 text-black font-semibold text-base shadow-lg hover:shadow-[var(--shadow-glow)] transition-all"
+              onClick={signInWithBitcoin}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Autenticando...
+                </>
+              ) : (
+                <>
+                  <Wallet className="w-5 h-5" />
+                  Sign-in with Bitcoin
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">Prova criptográfica de controle da chave Bitcoin</p>
+          </div>
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-border" />
@@ -262,5 +340,14 @@ export default function Connect() {
 declare global {
   interface Window {
     ethereum?: any;
+  }
+  interface Window {
+    webln?: { // Interface básica do WebLN para assinatura de mensagens
+      enable: () => Promise<void>;
+      signMessage: (message: string) => Promise<{ signature: string; pubkey: string }>;
+      getInfo: () => Promise<{
+        network?: string; // A propriedade pode ter nomes diferentes
+      }>;
+    };
   }
 }

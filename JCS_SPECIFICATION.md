@@ -1,51 +1,25 @@
-# JSON Canonicalization Scheme (JCS) Specification
+# JSON Canonicalization Scheme (JCS) - Signature Process
 
-*Version:* 0.1
+*Version: 1.0*
 
-## 1. Overview
+To ensure that no data is tampered with and to verify the origin of critical network objects like `service_order` and `batch_manifest`, the protocol relies on digital signatures.
 
-This document defines the mandatory standard for serializing JSON objects before they are submitted to a hash function for the creation of digital signatures. Consistency in serialization is *critical* for signature verification, as any variation in the output text (even a single whitespace) will result in a different hash and, consequently, a failure in signature verification.
+The validity of a digital signature depends on every node generating the exact same byte-for-byte representation of the data to be signed. Any variation, even a single extra space, will produce a different hash, causing the signature verification to fail.
 
-The SovereignComm Project adopts the *JSON Canonicalization Scheme (JCS)* standard, as defined in **RFC 8785**.
+To solve this, SovereignComm mandates the use of the **JSON Canonicalization Scheme (JCS)**, as defined in **RFC 8785**.
 
-## 2. Core Rules (Summary of RFC 8785)
+## Signature Generation Process
 
-All nodes that create or verify signatures *must* follow these rules when converting a JSON payload object into a byte string:
+All signing nodes (e.g., Ingestion Gateways, Batch Miners) **must** follow these steps:
 
-1.  **Text Encoding:** The JSON must be encoded in **UTF-8**.
-2.  **Key Ordering:** Keys (property names) within a JSON object must be sorted lexicographically (in alphabetical order, by Unicode code point value). This sorting must be applied recursively for all nested objects.
-3.  **Whitespace:** No "insignificant" whitespace is permitted. This means there should be no spaces or line breaks between JSON tokens (keys, values, commas, brackets, braces).
-4.  **Number Representation:** Numbers must be represented in the most compact format possible (no leading zeros, no `.0` decimal part for integers). Very large or very small numbers must use exponential notation (e.g., `1.23e45`).
-5.  **String Representation:** Special characters within strings must be escaped according to the JSON standard (e.g., `\"`, `\\`, `\n`). Unicode characters outside the basic ASCII set must be represented directly in UTF-8, not with `\uXXXX` escape sequences.
+1.  **Assemble Data:** The node assembles the complete JSON object, excluding the `signature` field itself.
+2.  **Canonicalize:** The object is passed through a JCS library. This process sorts all keys alphabetically (recursively) and removes all insignificant whitespace, producing a compact, deterministic string.
+3.  **Hash:** The resulting canonical string is hashed using **SHA-256**. This creates a unique, 32-byte fingerprint of the data.
+4.  **Sign:** The node uses its private key to sign the SHA-256 hash, producing the digital signature.
+5.  **Attach:** The final signature is added to the JSON object in the `signature` field.
 
-## 3. Practical Example
+Any node verifying the signature will perform the same steps (1-3) and use the public key of the signer to validate the signature against the generated hash.
 
-The following is an example of how a `service_order` payload is canonicalized.
+## Implementation Example
 
-### Original JSON Object (in memory)
-
-Consider the following payload object in a non-ordered representation:
-
-```json
-{
-  "gateway_pubkey": "02abcdef...",
-  "fee_total": 150,
-  "protocol_version": "0.1",
-  "cid": "bafybeigdyrzt5sfp7udm7hu76uh7y26...",
-  "gateway_ln_address": "gateway@example.com"
-}
-```
-
-### Canonically Serialized String (JCS Output)
-
-After applying the JCS rules, the resulting UTF-8 byte string, over which the SHA256 hash will be calculated, is:
-
-```text
-{"cid":"bafybeigdyrzt5sfp7udm7hu76uh7y26...","fee_total":150,"gateway_ln_address":"gateway@example.com","gateway_pubkey":"02abcdef...","protocol_version":"0.1"}
-```
-
-Note how the keys are now in alphabetical order (`cid`, `fee_total`, `gateway_ln_address`, `gateway_pubkey`, `protocol_version`) and all unnecessary whitespace has been removed.
-
-## 4. Implementation
-
-It is recommended to use existing and tested libraries that implement RFC 8785 to avoid subtle errors in manual implementation. The choice of library will depend on the programming language used for each node.
+A practical, fully-functional example of this entire process (key generation, canonicalization, hashing, signing, and verification) can be found in the `examples/jcs-signature-example.ts` script. This script serves as a reference implementation for any developer building a node for the SovereignComm network.

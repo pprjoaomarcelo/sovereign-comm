@@ -1,8 +1,11 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { InfoAsset } from "@/lib/marketplaceMock";
-import { Bitcoin, Ticket, FileLock, BookOpen } from "lucide-react";
+import { Bitcoin, Ticket, FileLock, BookOpen, Loader2 } from "lucide-react";
+import { requestProvider } from "webln";
+import { useState } from "react";
 
 interface InfoAssetCardProps {
   asset: InfoAsset;
@@ -20,7 +23,56 @@ const formatSats = (amount: number) => {
 };
 
 export const InfoAssetCard = ({ asset }: InfoAssetCardProps) => {
+  const { toast } = useToast();
+  const [isPaying, setIsPaying] = useState(false);
   const formatAddress = (addr: string) => `${addr.slice(0, 8)}...${addr.slice(-6)}`;
+
+  // Simula a obtenção de uma fatura de um backend/gateway
+  const getLightningInvoice = async (sats: number, memo: string): Promise<string> => {
+    console.log(`Gerando fatura para ${sats} sats com a descrição: ${memo}`);
+    // Em um cenário real, isso seria uma chamada `fetch` para o seu gateway:
+    // const response = await fetch('/api/generate-invoice', { method: 'POST', ... });
+    // const data = await response.json();
+    // return data.invoice;
+
+    // Para este exemplo, usaremos uma fatura de teste estática.
+    // NOTA: Faturas Lightning reais expiram e só podem ser pagas uma vez.
+    // Esta é apenas para demonstração do fluxo.
+    return "lnbc10u1p3z7z7xpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzj2t5938xrgq28q9z2gqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg.json";
+  };
+
+  const handlePurchase = async () => {
+    setIsPaying(true);
+    try {
+      const webln = await requestProvider();
+      const invoice = await getLightningInvoice(asset.priceSats, `Acesso ao ativo: ${asset.title}`);
+
+      toast({
+        title: "Aguardando Pagamento",
+        description: "Confirme o pagamento na sua carteira Lightning.",
+      });
+
+      const result = await webln.sendPayment(invoice);
+
+      toast({
+        title: "Pagamento bem-sucedido!",
+        description: `Você comprou acesso a ${asset.title}. Preimage: ${result.preimage.slice(0, 10)}...`,
+        className: "bg-green-500 text-white",
+      });
+
+      // Aqui você daria acesso ao conteúdo para o usuário
+
+    } catch (err: any) {
+      console.error("Falha no pagamento", err);
+      toast({
+        title: "Pagamento Falhou",
+        description: err.message || "O usuário cancelou ou a extensão não foi encontrada.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPaying(false);
+    }
+  };
 
   return (
     <Card className="flex flex-col overflow-hidden bg-card/50 backdrop-blur-sm">
@@ -61,8 +113,13 @@ export const InfoAssetCard = ({ asset }: InfoAssetCardProps) => {
             <span className="text-xl font-bold">{formatSats(asset.priceSats)}</span>
             <span className="text-sm text-muted-foreground">sats</span>
           </div>
-          <Button className="bg-primary hover:bg-primary/90 text-black">
-            Comprar Acesso
+          <Button
+            onClick={handlePurchase}
+            disabled={isPaying}
+            className="bg-primary hover:bg-primary/90 text-black gap-2"
+          >
+            {isPaying && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isPaying ? "Pagando..." : "Comprar Acesso"}
           </Button>
         </div>
       </CardFooter>

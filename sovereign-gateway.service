@@ -1,0 +1,31 @@
+[Unit]
+Description=SovereignComm Gateway Service
+Documentation=https://github.com/pprjoaomarcelo/sovereign-comm
+After=network.target
+
+[Service]
+# O tipo de serviço
+Type=simple
+
+# O usuário que executará o serviço (substitua 'mrx' pelo seu usuário de produção)
+User=mrx
+
+# O diretório de trabalho do gateway
+WorkingDirectory=/home/mrx/sovereign-comm/gateway
+
+# O comando exato para iniciar o gateway após o build
+ExecStart=/usr/bin/node /home/mrx/sovereign-comm/gateway/dist/index.js
+
+# Carrega as variáveis de ambiente do nosso arquivo .env
+EnvironmentFile=/home/mrx/sovereign-comm/gateway/.env
+
+# Política de reinicialização
+Restart=on-failure
+RestartSec=5s
+
+# Configuração de logs
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
